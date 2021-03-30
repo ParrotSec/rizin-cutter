@@ -1,0 +1,19 @@
+Source: rizin-cutter
+Section: devel
+Priority: optional
+Maintainer: Nong Hoang Tu <dmknght@parrotsec.org>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.5.1
+Homepage: https://rizin.re/
+Vcs-Browser: https://nest.parrotsec.org/packages/tools/rizin-cutter
+Vcs-Git: https://nest.parrotsec.org/packages/tools/rizin-cutter.git
+Rules-Requires-Root: no
+
+Package: rizin-cutter
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: GUI for rizin reverse engineering framework
+ Cutter is a Qt based GUI for reverse engineering binaries, which makes
+ use of the rizin framework. Advanced users are expected to use the
+ rizin CLI tools instead, which are much more powerful.
+
