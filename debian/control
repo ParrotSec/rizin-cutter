@@ -2,7 +2,22 @@ Source: rizin-cutter
 Section: devel
 Priority: optional
 Maintainer: Nong Hoang Tu <dmknght@parrotsec.org>
-Build-Depends: debhelper-compat (= 13)
+Build-Depends: cmake,
+               debhelper-compat (= 13),
+               dh-strip-nondeterminism,
+               libcapstone-dev,
+               libgraphviz-dev,
+               libkf5syntaxhighlighting-dev,
+               libqt5svg5-dev,
+               librizin-dev,
+               libxxhash-dev,
+               libzip-dev,
+               pkg-config,
+               python3-dev,
+               qtbase5-dev,
+               qttools5-dev,
+               qtwebengine5-dev,
+               zlib1g-dev
 Standards-Version: 4.5.1
 Homepage: https://rizin.re/
 Vcs-Browser: https://nest.parrotsec.org/packages/tools/rizin-cutter

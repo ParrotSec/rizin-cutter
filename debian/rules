@@ -1,25 +1,27 @@
 #!/usr/bin/make -f
-# See debhelper(7) (uncomment to enable)
-# output every command that modifies files on the build system.
-#export DH_VERBOSE = 1
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+export DEB_LDFLAGS_MAINT_APPEND := -Wl,--as-needed
 
-
-# see FEATURE AREAS in dpkg-buildflags(1)
-#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
-
-# see ENVIRONMENT in dpkg-buildflags(1)
-# package maintainers to append CFLAGS
-#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
-# package maintainers to append LDFLAGS
-#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
-
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
 
 %:
-	dh $@
+	dh $@ --buildsystem=cmake --sourcedirectory=src
 
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCUTTER_ENABLE_PYTHON=ON \
+		-DCUTTER_ENABLE_CRASH_REPORTS=OFF \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_PREFIX_PATH=/usr \
+		-DCUTTER_USE_BUNDLED_RIZIN=false
 
-# dh_make generated override targets
-# This is example for Cmake (See https://bugs.debian.org/641051 )
-#override_dh_auto_configure:
-#	dh_auto_configure -- \
-#	-DCMAKE_LIBRARY_PATH=$(DEB_HOST_MULTIARCH)
+override_dh_auto_install:
+	mkdir -p debian/rizin-cutter/usr/bin
+	install -m755 ./obj-$(DEB_HOST_GNU_TYPE)/Cutter debian/rizin-cutter/usr/bin/
+	mkdir -p debian/rizin-cutter/usr/share/applications
+	install -m644 ./src/re.rizin.cutter.desktop debian/rizin-cutter/usr/share/applications
+	mkdir -p debian/rizin-cutter/usr/share/icons/hicolor/scalable/apps
+	install -m644 ./src/img/cutter.svg debian/rizin-cutter/usr/share/icons/hicolor/scalable/apps
+
