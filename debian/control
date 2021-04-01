@@ -32,3 +32,8 @@ Description: GUI for rizin reverse engineering framework
  use of the rizin framework. Advanced users are expected to use the
  rizin CLI tools instead, which are much more powerful.
 
+Package: librizin-cutter-dev
+Architecture: any
+Depends: ${misc:Depends}
+Description: GUI for rizin reverse engineering framework
+ This package contains devel files from rizin-cutter
