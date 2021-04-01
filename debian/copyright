@@ -1,5 +1,5 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Source: https://github.com/radareorg/cutter
+Source: https://github.com/rizinorg/cutter
 
 Files: *
 Copyright: 2017, Hugo 'hteso' Teso
@@ -11,7 +11,7 @@ License: GPL-3
  On Debian systems, the complete text of the GPL-3 can be found in
  /usr/share/common-licenses/GPL-3.
 
-Files: src/org.radare.Cutter.appdata.xml
+Files: src/org.rizin.cutter.appdata.xml
 Copyright: 2018, xarkes
 License: CC0-1.0
  CC0 1.0 Universal
