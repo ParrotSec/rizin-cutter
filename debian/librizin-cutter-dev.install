@@ -1,8 +1,0 @@
-src/bindings/*.h /usr/include/librz-cutter/bindings/
-src/common/*.h /usr/include/librz-cutter/common/
-src/core/*.h /usr/include/librz-cutter/core/
-src/dialogs/*.h /usr/include/librz-cutter/dialogs/
-src/menus/*.h /usr/include/librz-cutter/menus/
-src/plugins/*.h /usr/include/librz-cutter/plugins/
-src/widgets/*.h /usr/include/librz-cutter/widgets/
-src/CutterApplication.h /usr/include/librz-cutter/
