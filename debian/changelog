@@ -1,3 +1,9 @@
+rizin-cutter (2.0.2-rc1-0parrot1) rolling; urgency=medium
+
+  * Rebuild package against librizin-core 0.2.1.
+
+ -- Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>  Thu, 29 Apr 2021 01:22:12 +0200
+
 rizin-cutter (2.0.2-rc1-parrot0) rolling-testing; urgency=medium
 
   * New upstream version 2.0.2-rc1
