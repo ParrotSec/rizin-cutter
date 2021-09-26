@@ -3119,29 +3119,25 @@ QList<SectionDescription> CutterCore::getAllSections()
     CORE_LOCK();
     QList<SectionDescription> sections;
 
-    RzBinObject *o = rz_bin_cur_object(core->bin);
-    if (!o) {
-        return sections;
-    }
+    QJsonDocument sectionsDoc = cmdj("iSj entropy");
+    QJsonObject sectionsObj = sectionsDoc.object();
+    QJsonArray sectionsArray = sectionsObj[RJsonKey::sections].toArray();
 
-    RzList *sects = rz_bin_object_get_sections(o);
-    if (!sects) {
-        return sections;
-    }
-    RzListIter *it;
-    RzBinSection *sect;
-    CutterRzListForeach (sects, it, RzBinSection, sect) {
-        if (RZ_STR_ISEMPTY(sect->name))
+    for (const QJsonValue &value : sectionsArray) {
+        QJsonObject sectionObject = value.toObject();
+
+        QString name = sectionObject[RJsonKey::name].toString();
+        if (name.isEmpty())
             continue;
 
         SectionDescription section;
-        section.name = sect->name;
-        section.vaddr = sect->vaddr;
-        section.vsize = sect->vsize;
-        section.paddr = sect->paddr;
-        section.size = sect->size;
-        section.perm = sect->perm;
-        section.entropy = "";
+        section.name = name;
+        section.vaddr = sectionObject[RJsonKey::vaddr].toVariant().toULongLong();
+        section.vsize = sectionObject[RJsonKey::vsize].toVariant().toULongLong();
+        section.paddr = sectionObject[RJsonKey::paddr].toVariant().toULongLong();
+        section.size = sectionObject[RJsonKey::size].toVariant().toULongLong();
+        section.perm = sectionObject[RJsonKey::perm].toString();
+        section.entropy = sectionObject[RJsonKey::entropy].toString();
 
         sections << section;
     }
@@ -3153,19 +3149,9 @@ QStringList CutterCore::getSectionList()
     CORE_LOCK();
     QStringList ret;
 
-    RzBinObject *o = rz_bin_cur_object(core->bin);
-    if (!o) {
-        return ret;
-    }
-
-    RzList *sects = rz_bin_object_get_sections(o);
-    if (!sects) {
-        return ret;
-    }
-    RzListIter *it;
-    RzBinSection *sect;
-    CutterRzListForeach (sects, it, RzBinSection, sect) {
-        ret << sect->name;
+    QJsonArray sectionsArray = cmdj("iSj").array();
+    for (const QJsonValue &value : sectionsArray) {
+        ret << value.toObject()[RJsonKey::name].toString();
     }
     return ret;
 }

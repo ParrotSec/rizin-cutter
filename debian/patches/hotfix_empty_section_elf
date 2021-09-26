@@ -1,0 +1,89 @@
+Description: Fix empty section widget when analysis ELF file
+ Version: Cutter 2.0.3 w/ rizin backend 0.3.0. When user open ELF
+ file, the widget Sections will be empty. This bug happens because
+ Rizin changed API for ELF analysis.
+ .
+ rizin-cutter (2.0.3-0parrot3) rolling; urgency=medium
+ .
+   * Enable python plugin for cutter
+Author: Nong Hoang Tu <dmknght@parrotsec.org>
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: https://github.com/rizinorg/cutter/pull/2785/files/98a72c68ab39b9c5cab82df7436cbf14fc0d09a2
+Bug: https://github.com/rizinorg/cutter/issues/2784
+Last-Update: 2021-09-26
+
+--- rizin-cutter-2.0.3.orig/src/core/Cutter.cpp
++++ rizin-cutter-2.0.3/src/core/Cutter.cpp
+@@ -3119,25 +3119,29 @@ QList<SectionDescription> CutterCore::ge
+     CORE_LOCK();
+     QList<SectionDescription> sections;
+ 
+-    QJsonDocument sectionsDoc = cmdj("iSj entropy");
+-    QJsonObject sectionsObj = sectionsDoc.object();
+-    QJsonArray sectionsArray = sectionsObj[RJsonKey::sections].toArray();
+-
+-    for (const QJsonValue &value : sectionsArray) {
+-        QJsonObject sectionObject = value.toObject();
++    RzBinObject *o = rz_bin_cur_object(core->bin);
++    if (!o) {
++        return sections;
++    }
+ 
+-        QString name = sectionObject[RJsonKey::name].toString();
+-        if (name.isEmpty())
++    RzList *sects = rz_bin_object_get_sections(o);
++    if (!sects) {
++        return sections;
++    }
++    RzListIter *it;
++    RzBinSection *sect;
++    CutterRzListForeach (sects, it, RzBinSection, sect) {
++        if (RZ_STR_ISEMPTY(sect->name))
+             continue;
+ 
+         SectionDescription section;
+-        section.name = name;
+-        section.vaddr = sectionObject[RJsonKey::vaddr].toVariant().toULongLong();
+-        section.vsize = sectionObject[RJsonKey::vsize].toVariant().toULongLong();
+-        section.paddr = sectionObject[RJsonKey::paddr].toVariant().toULongLong();
+-        section.size = sectionObject[RJsonKey::size].toVariant().toULongLong();
+-        section.perm = sectionObject[RJsonKey::perm].toString();
+-        section.entropy = sectionObject[RJsonKey::entropy].toString();
++        section.name = sect->name;
++        section.vaddr = sect->vaddr;
++        section.vsize = sect->vsize;
++        section.paddr = sect->paddr;
++        section.size = sect->size;
++        section.perm = sect->perm;
++        section.entropy = "";
+ 
+         sections << section;
+     }
+@@ -3149,9 +3153,19 @@ QStringList CutterCore::getSectionList()
+     CORE_LOCK();
+     QStringList ret;
+ 
+-    QJsonArray sectionsArray = cmdj("iSj").array();
+-    for (const QJsonValue &value : sectionsArray) {
+-        ret << value.toObject()[RJsonKey::name].toString();
++    RzBinObject *o = rz_bin_cur_object(core->bin);
++    if (!o) {
++        return ret;
++    }
++
++    RzList *sects = rz_bin_object_get_sections(o);
++    if (!sects) {
++        return ret;
++    }
++    RzListIter *it;
++    RzBinSection *sect;
++    CutterRzListForeach (sects, it, RzBinSection, sect) {
++        ret << sect->name;
+     }
+     return ret;
+ }
