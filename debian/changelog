@@ -1,3 +1,9 @@
+rizin-cutter (2.0.3-0parrot4) rolling; urgency=medium
+
+  * Add hotfix patch for empty section when user open elf file
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Sun, 26 Sep 2021 13:05:56 +0700
+
 rizin-cutter (2.0.3-0parrot3) rolling; urgency=medium
 
   * Enable python plugin for cutter
