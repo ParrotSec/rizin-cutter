@@ -20,8 +20,8 @@ override_dh_auto_configure:
 override_dh_auto_install:
 	mkdir -p debian/rizin-cutter/usr/bin
 	install -m755 ./obj-$(DEB_HOST_GNU_TYPE)/cutter debian/rizin-cutter/usr/bin/
-	mkdir -p debian/rizin-cutter/usr/share/applications
-	install -m644 ./src/re.rizin.cutter.desktop debian/rizin-cutter/usr/share/applications
+#	mkdir -p debian/rizin-cutter/usr/share/applications
+#	install -m644 ./src/re.rizin.cutter.desktop debian/rizin-cutter/usr/share/applications
 	mkdir -p debian/rizin-cutter/usr/share/icons/hicolor/scalable/apps
 	install -m644 ./src/img/cutter.svg debian/rizin-cutter/usr/share/icons/hicolor/scalable/apps
 
