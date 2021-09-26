@@ -1,3 +1,9 @@
+rizin-cutter (2.0.3-0parrot2) rolling; urgency=medium
+
+  * Remove duplicate cutter launcher
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Sun, 26 Sep 2021 07:25:55 +0700
+
 rizin-cutter (2.0.3-0parrot1) rolling-testing; urgency=medium
 
   * New upstream version 2.0.3
