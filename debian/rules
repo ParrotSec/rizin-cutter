@@ -15,7 +15,8 @@ override_dh_auto_configure:
 		-DCUTTER_ENABLE_CRASH_REPORTS=OFF \
 		-DCMAKE_BUILD_TYPE=Release \
 		-DCMAKE_PREFIX_PATH=/usr \
-		-DCUTTER_USE_BUNDLED_RIZIN=false
+		-DCUTTER_USE_BUNDLED_RIZIN=false \
+		-DCUTTER_ENABLE_PYTHON_BINDINGS=ON
 
 override_dh_auto_install:
 	mkdir -p debian/rizin-cutter/usr/bin
