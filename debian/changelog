@@ -1,3 +1,9 @@
+rizin-cutter (2.0.4-rc1-0parrot1) rolling-testing; urgency=medium
+
+  * New upstream version 2.0.4-rc1
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Thu, 18 Nov 2021 05:36:12 +0700
+
 rizin-cutter (2.0.3-0parrot4) rolling; urgency=medium
 
   * Add hotfix patch for empty section when user open elf file
