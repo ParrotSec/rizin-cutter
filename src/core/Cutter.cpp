@@ -782,7 +782,9 @@ void CutterCore::editBytesEndian(RVA addr, const QString &bytes)
 
 void CutterCore::setToCode(RVA addr)
 {
-    cmdRawAt("Cd-", addr);
+    CORE_LOCK();
+    rz_meta_del(core->analysis, RZ_META_TYPE_STRING, core->offset, 1);
+    rz_meta_del(core->analysis, RZ_META_TYPE_DATA, core->offset, 1);
     emit instructionChanged(addr);
 }
 
@@ -3128,6 +3130,11 @@ QList<SectionDescription> CutterCore::getAllSections()
     if (!sects) {
         return sections;
     }
+    RzList *hashnames = rz_list_newf(free);
+    if (!hashnames) {
+        return sections;
+    }
+    rz_list_push(hashnames, rz_str_new("entropy"));
     RzListIter *it;
     RzBinSection *sect;
     CutterRzListForeach (sects, it, RzBinSection, sect) {
@@ -3140,11 +3147,18 @@ QList<SectionDescription> CutterCore::getAllSections()
         section.vsize = sect->vsize;
         section.paddr = sect->paddr;
         section.size = sect->size;
-        section.perm = sect->perm;
-        section.entropy = "";
+        section.perm = rz_str_rwx_i(sect->perm);
+        HtPP *digests = rz_core_bin_section_digests(core, sect, hashnames);
+        if (!digests) {
+            continue;
+        }
+        const char *entropy = (const char*)ht_pp_find(digests, "entropy", NULL);
+        section.entropy = rz_str_get(entropy);
+        ht_pp_free(digests);
 
         sections << section;
     }
+    rz_list_free(sects);
     return sections;
 }
 
