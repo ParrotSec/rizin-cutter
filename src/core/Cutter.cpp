@@ -392,7 +392,7 @@ bool CutterCore::isRedirectableDebugee()
     RzIODesc *desc;
     CutterRzListForeach (descs, it, RzIODesc, desc) {
         QString URI = QString(desc->uri);
-        if (URI.contains("ptrace") | URI.contains("mach")) {
+        if (URI.contains("ptrace") || URI.contains("mach")) {
             return true;
         }
     }
@@ -747,19 +747,22 @@ QString CutterCore::getInstructionOpcode(RVA addr)
 
 void CutterCore::editInstruction(RVA addr, const QString &inst)
 {
-    cmdRawAt(QString("wa %1").arg(inst), addr);
+    CORE_LOCK();
+    rz_core_write_assembly(core, addr, inst.trimmed().toStdString().c_str(), false, false);
     emit instructionChanged(addr);
 }
 
 void CutterCore::nopInstruction(RVA addr)
 {
-    cmdRawAt("wao nop", addr);
+    CORE_LOCK();
+    applyAtSeek([&]() { rz_core_hack(core, "nop"); }, addr);
     emit instructionChanged(addr);
 }
 
 void CutterCore::jmpReverse(RVA addr)
 {
-    cmdRawAt("wao recj", addr);
+    CORE_LOCK();
+    applyAtSeek([&]() { rz_core_hack(core, "recj"); }, addr);
     emit instructionChanged(addr);
 }
 
@@ -849,13 +852,15 @@ int CutterCore::sizeofDataMeta(RVA addr)
 
 void CutterCore::setComment(RVA addr, const QString &cmt)
 {
-    cmdRawAt(QString("CCu base64:%1").arg(QString(cmt.toLocal8Bit().toBase64())), addr);
+    CORE_LOCK();
+    rz_meta_set_string(core->analysis, RZ_META_TYPE_COMMENT, addr, cmt.toStdString().c_str());
     emit commentsChanged(addr);
 }
 
 void CutterCore::delComment(RVA addr)
 {
-    cmdRawAt("CC-", addr);
+    CORE_LOCK();
+    rz_meta_del(core->analysis, RZ_META_TYPE_COMMENT, addr, 1);
     emit commentsChanged(addr);
 }
 
@@ -3152,7 +3157,7 @@ QList<SectionDescription> CutterCore::getAllSections()
         if (!digests) {
             continue;
         }
-        const char *entropy = (const char*)ht_pp_find(digests, "entropy", NULL);
+        const char *entropy = (const char *)ht_pp_find(digests, "entropy", NULL);
         section.entropy = rz_str_get(entropy);
         ht_pp_free(digests);
 
@@ -3376,6 +3381,7 @@ QList<AnalysisMethodDescription> CutterCore::getAnalysisClassMethods(const QStri
     {
         AnalysisMethodDescription desc;
         desc.name = QString::fromUtf8(meth->name);
+        desc.realName = QString::fromUtf8(meth->real_name);
         desc.addr = meth->addr;
         desc.vtableOffset = meth->vtable_offset;
         ret.append(desc);
@@ -3465,6 +3471,7 @@ bool CutterCore::getAnalysisMethod(const QString &cls, const QString &meth,
         return false;
     }
     desc->name = QString::fromUtf8(analysisMeth.name);
+    desc->realName = QString::fromUtf8(analysisMeth.real_name);
     desc->addr = analysisMeth.addr;
     desc->vtableOffset = analysisMeth.vtable_offset;
     rz_analysis_class_method_fini(&analysisMeth);
@@ -3475,7 +3482,8 @@ void CutterCore::setAnalysisMethod(const QString &className, const AnalysisMetho
 {
     CORE_LOCK();
     RzAnalysisMethod analysisMeth;
-    analysisMeth.name = strdup(meth.name.toUtf8().constData());
+    analysisMeth.name = rz_str_new(meth.name.toUtf8().constData());
+    analysisMeth.real_name = rz_str_new(meth.realName.toUtf8().constData());
     analysisMeth.addr = meth.addr;
     analysisMeth.vtable_offset = meth.vtableOffset;
     rz_analysis_class_method_set(core->analysis, className.toUtf8().constData(), &analysisMeth);
