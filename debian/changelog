@@ -1,3 +1,9 @@
+rizin-cutter (2.0.5-rc2-0parrot1) rolling-testing; urgency=medium
+
+  * New upstream version 2.0.5-rc2
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Tue, 04 Jan 2022 15:15:35 +0700
+
 rizin-cutter (2.0.5-rc1-0parrot1) rolling-testing; urgency=medium
 
   * New upstream version 2.0.5-rc1
