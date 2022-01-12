@@ -1,3 +1,9 @@
+rizin-cutter (2.0.5-rc4-0parrot2) parrot-updates; urgency=medium
+
+  * Remove hot fix for elf patch
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Wed, 12 Jan 2022 18:25:07 +0700
+
 rizin-cutter (2.0.5-rc4-0parrot1) rolling-testing; urgency=medium
 
   * New upstream version 2.0.5-rc4
