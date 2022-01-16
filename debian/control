@@ -20,7 +20,8 @@ Build-Depends: cmake,
                zlib1g-dev,
                libshiboken2-dev,
                libpyside2-dev,
-               qtdeclarative5-dev
+               qtdeclarative5-dev,
+               clang
 Standards-Version: 4.5.1
 Homepage: https://rizin.re/
 Vcs-Browser: https://nest.parrotsec.org/packages/tools/rizin-cutter
