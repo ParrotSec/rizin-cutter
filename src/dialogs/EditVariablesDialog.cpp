@@ -14,7 +14,8 @@ EditVariablesDialog::EditVariablesDialog(RVA offset, QString initialVar, QWidget
     connect<void (QComboBox::*)(int)>(ui->dropdownLocalVars, &QComboBox::currentIndexChanged, this,
                                       &EditVariablesDialog::updateFields);
 
-    QString fcnName = Core()->cmdRawAt("afn.", offset).trimmed();
+    RzAnalysisFunction *f = rz_analysis_get_function_at(Core()->core()->analysis, offset);
+    QString fcnName = f->name;
     functionAddress = offset;
     setWindowTitle(tr("Edit Variables in Function: %1").arg(fcnName));
 
@@ -73,7 +74,7 @@ void EditVariablesDialog::applyFields()
     if (!v_type || error_msg) {
         return;
     }
-    rz_analysis_var_set_type(v, v_type);
+    rz_analysis_var_set_type(v, v_type, true);
 
     // TODO Remove all those replace once rizin command parser is fixed
     QString newName = ui->nameEdit->text()

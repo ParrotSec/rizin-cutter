@@ -314,15 +314,15 @@ void DisassemblyContextMenu::addDebugMenu()
 QVector<DisassemblyContextMenu::ThingUsedHere> DisassemblyContextMenu::getThingUsedHere(RVA offset)
 {
     QVector<ThingUsedHere> result;
-    const QJsonArray array = Core()->cmdj("anj @ " + QString::number(offset)).array();
+    const CutterJson array = Core()->cmdj("anj @ " + QString::number(offset));
     result.reserve(array.size());
     for (const auto &thing : array) {
-        auto obj = thing.toObject();
-        RVA offset = obj["offset"].toVariant().toULongLong();
+        auto obj = thing;
+        RVA offset = obj["offset"].toRVA();
         QString name;
 
         // If real names display is enabled, show flag's real name instead of full flag name
-        if (Config()->getConfigBool("asm.flags.real") && obj.contains("realname")) {
+        if (Config()->getConfigBool("asm.flags.real") && obj["realname"].valid()) {
             name = obj["realname"].toString();
         } else {
             name = obj["name"].toString();
@@ -482,31 +482,40 @@ void DisassemblyContextMenu::setupRenaming()
 void DisassemblyContextMenu::aboutToShowSlot()
 {
     // check if set immediate base menu makes sense
-    QJsonObject instObject =
-            Core()->cmdj("aoj @ " + QString::number(offset)).array().first().toObject();
-    auto keys = instObject.keys();
-    bool immBase = keys.contains("val") || keys.contains("ptr");
+    RzPVector *vec = (RzPVector *)Core()->returnAtSeek(
+            [&]() {
+                RzCoreLocked core(Core());
+                return rz_core_analysis_bytes(core, core->block, (int)core->blocksize, 1);
+            },
+            offset);
+    auto *ab = static_cast<RzAnalysisBytes *>(rz_pvector_head(vec));
+
+    bool immBase = ab && ab->op && (ab->op->val || ab->op->ptr);
     setBaseMenu->menuAction()->setVisible(immBase);
     setBitsMenu->menuAction()->setVisible(true);
 
     // Create structure offset menu if it makes sense
     QString memBaseReg; // Base register
-    QVariant memDisp; // Displacement
-    if (instObject.contains("opex") && instObject["opex"].toObject().contains("operands")) {
+    st64 memDisp = 0; // Displacement
+
+    if (ab && ab->op) {
+        const char *opexstr = RZ_STRBUF_SAFEGET(&ab->op->opex);
+        CutterJson operands = Core()->parseJson(strdup(opexstr), nullptr);
+
         // Loop through both the operands of the instruction
-        for (const QJsonValue value : instObject["opex"].toObject()["operands"].toArray()) {
-            QJsonObject operand = value.toObject();
-            if (operand.contains("type") && operand["type"].toString() == "mem"
-                && operand.contains("base") && !operand["base"].toString().contains("bp")
-                && operand.contains("disp") && operand["disp"].toVariant().toLongLong() > 0) {
+        for (const CutterJson operand : operands) {
+            if (operand["type"].toString() == "mem" && !operand["base"].toString().contains("bp")
+                && operand["disp"].toSt64() > 0) {
 
                 // The current operand is the one which has an immediate displacement
                 memBaseReg = operand["base"].toString();
-                memDisp = operand["disp"].toVariant();
+                memDisp = operand["disp"].toSt64();
                 break;
             }
         }
     }
+    rz_pvector_free(vec);
+
     if (memBaseReg.isEmpty()) {
         // hide structure offset menu
         structureOffsetMenu->menuAction()->setVisible(false);
@@ -515,15 +524,19 @@ void DisassemblyContextMenu::aboutToShowSlot()
         structureOffsetMenu->menuAction()->setVisible(true);
         structureOffsetMenu->clear();
 
-        // Get the possible offsets using the "ahts" command
-        // TODO: add ahtj command to Rizin and then use it here
-        QStringList ret = Core()->cmdList("ahts " + memDisp.toString());
-        for (const QString &val : ret) {
-            if (val.isEmpty()) {
-                continue;
+        RzCoreLocked core(Core());
+        RzList *typeoffs = rz_type_db_get_by_offset(core->analysis->typedb, memDisp);
+        if (typeoffs) {
+            for (const auto &ty : CutterRzList<RzTypePath>(typeoffs)) {
+                if (RZ_STR_ISEMPTY(ty->path)) {
+                    continue;
+                }
+                structureOffsetMenu->addAction("[" + memBaseReg + " + " + ty->path + "]")
+                        ->setData(ty->path);
             }
-            structureOffsetMenu->addAction("[" + memBaseReg + " + " + val + "]")->setData(val);
+            rz_list_free(typeoffs);
         }
+
         if (structureOffsetMenu->isEmpty()) {
             // No possible offset was found so hide the menu
             structureOffsetMenu->menuAction()->setVisible(false);
@@ -533,7 +546,7 @@ void DisassemblyContextMenu::aboutToShowSlot()
     actionAnalyzeFunction.setVisible(true);
 
     // Show the option to remove a defined string only if a string is defined in this address
-    QString stringDefinition = Core()->cmdRawAt("Cs.", offset);
+    QString stringDefinition = Core()->getMetaString(offset);
     actionSetAsStringRemove.setVisible(!stringDefinition.isEmpty());
 
     QString comment = Core()->getCommentAt(offset);
@@ -695,9 +708,10 @@ void DisassemblyContextMenu::on_actionEditInstruction_triggered()
     e.setInstruction(oldInstructionOpcode);
 
     if (e.exec()) {
+        bool fillWithNops = e.needsNops();
         QString userInstructionOpcode = e.getInstruction();
         if (userInstructionOpcode != oldInstructionOpcode) {
-            Core()->editInstruction(offset, userInstructionOpcode);
+            Core()->editInstruction(offset, userInstructionOpcode, fillWithNops);
         }
     }
 }
@@ -714,12 +728,12 @@ void DisassemblyContextMenu::showReverseJmpQuery()
 {
     QString type;
 
-    QJsonArray array = Core()->cmdj("pdj 1 @ " + RzAddressString(offset)).array();
-    if (array.isEmpty()) {
+    CutterJson array = Core()->cmdj("pdj 1 @ " + RzAddressString(offset));
+    if (!array.size()) {
         return;
     }
 
-    type = array.first().toObject()["type"].toString();
+    type = array.first()["type"].toString();
     if (type == "cjmp") {
         actionJmpReverse.setVisible(true);
     } else {
@@ -782,7 +796,7 @@ void DisassemblyContextMenu::on_actionAdvancedBreakpoint_triggered()
 
 void DisassemblyContextMenu::on_actionContinueUntil_triggered()
 {
-    Core()->continueUntilDebug(RzAddressString(offset));
+    Core()->continueUntilDebug(offset);
 }
 
 void DisassemblyContextMenu::on_actionSetPC_triggered()
@@ -866,7 +880,7 @@ void DisassemblyContextMenu::on_actionSetFunctionVarTypes_triggered()
         return;
     }
 
-    EditVariablesDialog dialog(fcn->addr, curHighlightedWord, this);
+    EditVariablesDialog dialog(fcn->addr, curHighlightedWord, this->mainWindow);
     if (dialog.empty()) { // don't show the dialog if there are no variables
         return;
     }
@@ -1005,8 +1019,18 @@ void DisassemblyContextMenu::on_actionEditFunction_triggered()
 
         dialog.setStackSizeText(QString::number(fcn->stack));
 
-        QStringList callConList = Core()->cmdRaw("afcl").split("\n");
-        callConList.removeLast();
+        QStringList callConList;
+        RzList *list = rz_analysis_calling_conventions(core->analysis);
+        if (!list) {
+            return;
+        }
+        RzListIter *iter;
+        const char *cc;
+        CutterRzListForeach (list, iter, const char, cc) {
+            callConList << cc;
+        }
+        rz_list_free(list);
+
         dialog.setCallConList(callConList);
         dialog.setCallConSelected(fcn->cc);
 
@@ -1017,7 +1041,15 @@ void DisassemblyContextMenu::on_actionEditFunction_triggered()
             fcn->addr = Core()->math(new_start_addr);
             QString new_stack_size = dialog.getStackSizeText();
             fcn->stack = int(Core()->math(new_stack_size));
-            Core()->cmdRaw("afc " + dialog.getCallConSelected());
+
+            const char *ccSelected = dialog.getCallConSelected().toUtf8().constData();
+            if (RZ_STR_ISEMPTY(ccSelected)) {
+                return;
+            }
+            if (rz_analysis_cc_exist(core->analysis, ccSelected)) {
+                fcn->cc = rz_str_constpool_get(&core->analysis->constpool, ccSelected);
+            }
+
             emit Core()->functionsChanged();
         }
     }

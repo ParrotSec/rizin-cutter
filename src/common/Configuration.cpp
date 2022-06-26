@@ -7,9 +7,9 @@
 #include <QApplication>
 
 #ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
-#    include <KSyntaxHighlighting/repository.h>
-#    include <KSyntaxHighlighting/theme.h>
-#    include <KSyntaxHighlighting/definition.h>
+#    include <KSyntaxHighlighting/Repository>
+#    include <KSyntaxHighlighting/Theme>
+#    include <KSyntaxHighlighting/Definition>
 #endif
 
 #include "common/ColorThemeWorker.h"
@@ -21,17 +21,16 @@
  * and for light - only light ones.
  */
 const QHash<QString, ColorFlags> Configuration::relevantThemes = {
-    { "ayu", DarkFlag },    { "basic", DarkFlag },  { "behelit", DarkFlag },
-    { "bold", DarkFlag },   { "bright", DarkFlag }, { "consonance", DarkFlag },
-    { "darkda", DarkFlag }, { "defragger", DarkFlag },  { "focus", DarkFlag },
-    { "gentoo", DarkFlag }, { "lima", DarkFlag },   { "monokai", DarkFlag },
-    { "ogray", DarkFlag },  { "onedark", DarkFlag },    { "pink", DarkFlag },
-    { "rasta", DarkFlag },  { "sepia", DarkFlag },  { "smyck", DarkFlag },
-    { "solarized", DarkFlag },  { "twilight", DarkFlag },   { "white2", DarkFlag },
-    { "xvilka", DarkFlag }, { "zenburn", DarkFlag },
-    { "cga", LightFlag },   { "cutter", LightFlag },    { "dark", LightFlag },
-    { "gb", LightFlag },    { "matrix", LightFlag },    { "tango", LightFlag },
-    { "white", LightFlag }
+    { "ayu", DarkFlag },       { "basic", DarkFlag },     { "behelit", DarkFlag },
+    { "bold", DarkFlag },      { "bright", DarkFlag },    { "consonance", DarkFlag },
+    { "darkda", DarkFlag },    { "defragger", DarkFlag }, { "focus", DarkFlag },
+    { "gentoo", DarkFlag },    { "lima", DarkFlag },      { "monokai", DarkFlag },
+    { "ogray", DarkFlag },     { "onedark", DarkFlag },   { "pink", DarkFlag },
+    { "rasta", DarkFlag },     { "sepia", DarkFlag },     { "smyck", DarkFlag },
+    { "solarized", DarkFlag }, { "twilight", DarkFlag },  { "white2", DarkFlag },
+    { "xvilka", DarkFlag },    { "zenburn", DarkFlag },   { "cga", LightFlag },
+    { "cutter", LightFlag },   { "dark", LightFlag },     { "gb", LightFlag },
+    { "matrix", LightFlag },   { "tango", LightFlag },    { "white", LightFlag }
 };
 static const QString DEFAULT_LIGHT_COLOR_THEME = "cutter";
 static const QString DEFAULT_DARK_COLOR_THEME = "ayu";
@@ -47,6 +46,8 @@ const QHash<QString, QHash<ColorFlags, QColor>> Configuration::cutterOptionColor
       { { DarkFlag, QColor(0x9b, 0x9b, 0x9b) }, { LightFlag, QColor(0x9b, 0x9b, 0x9b) } } },
     { "gui.main",
       { { DarkFlag, QColor(0x21, 0xd8, 0x93) }, { LightFlag, QColor(0x00, 0x80, 0x00) } } },
+    { "gui.flirt",
+      { { DarkFlag, QColor(0xd8, 0xbb, 0x21) }, { LightFlag, QColor(0xf1, 0xc4, 0x0f) } } },
     { "gui.item_unsafe",
       { { DarkFlag, QColor(0xff, 0x81, 0x7b) }, { LightFlag, QColor(0xff, 0x81, 0x7b) } } },
     { "gui.navbar.seek",
@@ -251,8 +252,8 @@ bool Configuration::setLocaleByName(const QString &language)
             QLocale::matchingLocales(QLocale::AnyLanguage, QLocale::AnyScript, QLocale::AnyCountry);
 
     for (auto &it : allLocales) {
-        if (QString::compare(it.nativeLanguageName(), language, Qt::CaseInsensitive) == 0 ||
-            it.name() == language) {
+        if (QString::compare(it.nativeLanguageName(), language, Qt::CaseInsensitive) == 0
+            || it.name() == language) {
             setLocale(it);
             return true;
         }
@@ -289,7 +290,8 @@ void Configuration::loadNativeStylesheet()
         QTextStream ts(&f);
         QString stylesheet = ts.readAll();
 #ifdef Q_OS_MACOS
-        QFile mf(nativeWindowIsDark() ? ":native/native-macos-dark.qss" : ":native/native-macos-light.qss");
+        QFile mf(nativeWindowIsDark() ? ":native/native-macos-dark.qss"
+                                      : ":native/native-macos-light.qss");
         if (mf.exists()) {
             mf.open(QFile::ReadOnly | QFile::Text);
             QTextStream mts(&mf);
@@ -527,20 +529,16 @@ const QColor Configuration::getColor(const QString &name) const
 void Configuration::setColorTheme(const QString &theme)
 {
     if (theme == "default") {
-        Core()->cmdRaw("ecd");
+        rz_cons_pal_init(Core()->core()->cons->context);
         s.setValue("theme", "default");
     } else {
-        rz_core_load_theme(Core()->core(), theme.toUtf8().constData());
+        rz_core_theme_load(Core()->core(), theme.toUtf8().constData());
         s.setValue("theme", theme);
     }
 
-    QJsonObject colorTheme = ThemeWorker().getTheme(theme).object();
+    ColorThemeWorker::Theme colorTheme = ThemeWorker().getTheme(theme);
     for (auto it = colorTheme.constBegin(); it != colorTheme.constEnd(); it++) {
-        QJsonArray rgb = it.value().toArray();
-        if (rgb.size() != 4) {
-            continue;
-        }
-        setColor(it.key(), QColor(rgb[0].toInt(), rgb[1].toInt(), rgb[2].toInt(), rgb[3].toInt()));
+        setColor(it.key(), it.value());
     }
 
     emit colorsUpdated();
@@ -667,11 +665,13 @@ QStringList Configuration::getAvailableTranslations()
 
     for (auto i : fileNames) {
         QString localeName = i.mid(sizeof("cutter_") - 1, 2); // TODO:#2321 don't asume 2 characters
-        // language code is sometimes 3 characters, and there could also be language_COUNTRY. Qt supports that.
+        // language code is sometimes 3 characters, and there could also be language_COUNTRY. Qt
+        // supports that.
         QLocale locale(localeName);
         if (locale.language() != QLocale::C) {
             currLanguageName = locale.nativeLanguageName();
-            if (currLanguageName.isEmpty()) { // Qt doesn't have native language name for some languages
+            if (currLanguageName
+                        .isEmpty()) { // Qt doesn't have native language name for some languages
                 currLanguageName = QLocale::languageToString(locale.language());
             }
             if (!currLanguageName.isEmpty()) {
@@ -774,7 +774,7 @@ bool Configuration::getOutputRedirectionEnabled() const
     return outputRedirectEnabled;
 }
 
-void Configuration::setPreviewValue( bool checked )
+void Configuration::setPreviewValue(bool checked)
 {
     s.setValue("asm.preview", checked);
 }
@@ -820,4 +820,14 @@ void Configuration::addRecentProject(QString file)
     files.removeAll(file);
     files.prepend(file);
     setRecentProjects(files);
+}
+
+QString Configuration::getFunctionsWidgetLayout()
+{
+    return s.value("functionsWidgetLayout").toString();
+}
+
+void Configuration::setFunctionsWidgetLayout(const QString &layout)
+{
+    s.setValue("functionsWidgetLayout", layout);
 }

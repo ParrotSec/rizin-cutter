@@ -4,6 +4,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/CutterConfig.h.in"
 set(SOURCES
     Main.cpp
     core/Cutter.cpp
+    core/CutterJson.cpp
     dialogs/EditStringDialog.cpp
     dialogs/WriteCommandsDialogs.cpp
     widgets/DisassemblerGraphView.cpp
@@ -42,6 +43,7 @@ set(SOURCES
     widgets/SymbolsWidget.cpp
     menus/DisassemblyContextMenu.cpp
     menus/DecompilerContextMenu.cpp
+    menus/FlirtContextMenu.cpp
     widgets/DisassemblyWidget.cpp
     widgets/HexdumpWidget.cpp
     common/Configuration.cpp
@@ -73,7 +75,7 @@ set(SOURCES
     common/JsonTreeItem.cpp
     common/JsonModel.cpp
     dialogs/VersionInfoDialog.cpp
-    widgets/ZignaturesWidget.cpp
+    widgets/FlirtWidget.cpp
     common/AsyncTask.cpp
     dialogs/AsyncTaskDialog.cpp
     widgets/StackWidget.cpp
@@ -152,6 +154,7 @@ set(HEADER_FILES
     core/Cutter.h
     core/CutterCommon.h
     core/CutterDescriptions.h
+    core/CutterJson.h
     dialogs/EditStringDialog.h
     dialogs/WriteCommandsDialogs.h
     widgets/DisassemblerGraphView.h
@@ -190,6 +193,7 @@ set(HEADER_FILES
     widgets/SymbolsWidget.h
     menus/DisassemblyContextMenu.h
     menus/DecompilerContextMenu.h
+    menus/FlirtContextMenu.h
     widgets/DisassemblyWidget.h
     widgets/HexdumpWidget.h
     common/Configuration.h
@@ -221,7 +225,7 @@ set(HEADER_FILES
     common/JsonTreeItem.h
     common/JsonModel.h
     dialogs/VersionInfoDialog.h
-    widgets/ZignaturesWidget.h
+    widgets/FlirtWidget.h
     common/AsyncTask.h
     dialogs/AsyncTaskDialog.h
     widgets/StackWidget.h
@@ -341,7 +345,7 @@ set(UI_FILES
     widgets/SearchWidget.ui
     dialogs/RizinPluginsDialog.ui
     dialogs/VersionInfoDialog.ui
-    widgets/ZignaturesWidget.ui
+    widgets/FlirtWidget.ui
     dialogs/AsyncTaskDialog.ui
     dialogs/RizinTaskDialog.ui
     widgets/StackWidget.ui
@@ -499,6 +503,10 @@ if(CUTTER_ENABLE_PYTHON)
         target_link_libraries(Cutter PRIVATE Shiboken2::libshiboken PySide2::pyside2)
 
         get_target_property(RAW_BINDINGS_INCLUDE_DIRS Cutter INCLUDE_DIRECTORIES)
+        if(NOT CUTTER_USE_BUNDLED_RIZIN)
+            get_target_property(RAW_RIZIN_INCLUDE_DIRS ${RIZIN_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+            list(APPEND RAW_BINDINGS_INCLUDE_DIRS "${RAW_RIZIN_INCLUDE_DIRS}")
+        endif()
         set(BINDINGS_INCLUDE_DIRS "")
         foreach(_dir ${RAW_BINDINGS_INCLUDE_DIRS})
             string(REGEX REPLACE "\\$<BUILD_INTERFACE:(.*)>" "\\1" _dir ${_dir})
@@ -554,17 +562,26 @@ install(TARGETS Cutter
         EXPORT CutterTargets
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
         BUNDLE DESTINATION "." # needs to be tested
-        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Devel
-)
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Devel)
 install(EXPORT CutterTargets
     NAMESPACE Cutter::
-    DESTINATION "${ConfigPackageLocation}"
+    DESTINATION "${CUTTER_INSTALL_CONFIGDIR}"
     COMPONENT Devel)
+include(CMakePackageConfigHelpers)
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/CutterConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/CutterConfig.cmake"
+    INSTALL_DESTINATION "${CUTTER_INSTALL_CONFIGDIR}"
+    NO_SET_AND_CHECK_MACRO
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/CutterConfigVersion.cmake"
+    VERSION "${CUTTER_VERSION_FULL}"
+    COMPATIBILITY AnyNewerVersion)
 install(FILES
-    ../cmake/CutterConfig.cmake
-    DESTINATION ${ConfigPackageLocation}
-    COMPONENT Devel
-)
+    "${CMAKE_CURRENT_BINARY_DIR}/CutterConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/CutterConfigVersion.cmake"
+    DESTINATION ${CUTTER_INSTALL_CONFIGDIR}
+    COMPONENT Devel)
 foreach(_file ${HEADER_FILES})
     # Can't use target PUBLIC_HEADER option for installing due to multiple directories
     get_filename_component(_header_dir "${_file}" DIRECTORY)
@@ -572,8 +589,8 @@ foreach(_file ${HEADER_FILES})
 endforeach()
 
 if(UNIX AND NOT APPLE)
-    install (FILES "img/cutter.svg"
-                DESTINATION "share/icons/hicolor/scalable/apps/")
+    install(FILES "img/cutter.svg"
+        DESTINATION "share/icons/hicolor/scalable/apps/")
     install(FILES "re.rizin.cutter.desktop"
         DESTINATION "share/applications"
         COMPONENT Devel)
