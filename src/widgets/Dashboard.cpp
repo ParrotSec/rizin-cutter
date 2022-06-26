@@ -32,27 +32,12 @@ Dashboard::~Dashboard() {}
 
 void Dashboard::updateContents()
 {
-    QJsonDocument docu = Core()->getFileInfo();
-    QJsonObject item = docu.object()["core"].toObject();
-    QJsonObject item2 = docu.object()["bin"].toObject();
+    CutterJson docu = Core()->getFileInfo();
+    CutterJson item = docu["core"];
+    CutterJson item2 = docu["bin"];
 
-    setPlainText(this->ui->fileEdit, item["file"].toString());
-    setPlainText(this->ui->formatEdit, item["format"].toString());
     setPlainText(this->ui->modeEdit, item["mode"].toString());
-    setPlainText(this->ui->typeEdit, item["type"].toString());
-    setPlainText(this->ui->sizeEdit, qhelpers::formatBytecount(item["size"].toDouble()));
-    setPlainText(this->ui->fdEdit, QString::number(item["fd"].toDouble()));
-
-    setPlainText(this->ui->archEdit, item2["arch"].toString());
-    setPlainText(this->ui->langEdit, item2["lang"].toString().toUpper());
-    setPlainText(this->ui->classEdit, item2["class"].toString());
-    setPlainText(this->ui->machineEdit, item2["machine"].toString());
-    setPlainText(this->ui->osEdit, item2["os"].toString());
-    setPlainText(this->ui->subsysEdit, item2["subsys"].toString());
-    setPlainText(this->ui->endianEdit, item2["endian"].toString());
     setPlainText(this->ui->compilationDateEdit, item2["compiled"].toString());
-    setPlainText(this->ui->compilerEdit, item2["compiler"].toString());
-    setPlainText(this->ui->bitsEdit, QString::number(item2["bits"].toDouble()));
 
     if (!item2["relro"].toString().isEmpty()) {
         QString relro = item2["relro"].toString().section(QLatin1Char(' '), 0, 0);
@@ -62,22 +47,38 @@ void Dashboard::updateContents()
         setPlainText(this->ui->relroEdit, "N/A");
     }
 
-    setPlainText(this->ui->baddrEdit, RzAddressString(item2["baddr"].toVariant().toULongLong()));
-
-    // set booleans
-    setBool(this->ui->vaEdit, item2, "va");
-    setBool(this->ui->canaryEdit, item2, "canary");
-    setBool(this->ui->cryptoEdit, item2, "crypto");
-    setBool(this->ui->nxEdit, item2, "nx");
-    setBool(this->ui->picEdit, item2, "pic");
-    setBool(this->ui->staticEdit, item2, "static");
-    setBool(this->ui->strippedEdit, item2, "stripped");
-    setBool(this->ui->relocsEdit, item2, "relocs");
-
     // Add file hashes, analysis info and libraries
     RzCoreLocked core(Core());
     RzBinFile *bf = rz_bin_cur(core->bin);
-    RzList *hashes = rz_bin_file_compute_hashes(core->bin, bf, UT64_MAX);
+    RzBinInfo *binInfo = rz_bin_get_info(core->bin);
+
+    setPlainText(ui->fileEdit, binInfo ? binInfo->file : "");
+    setPlainText(ui->formatEdit, binInfo ? binInfo->rclass : "");
+    setPlainText(ui->typeEdit, binInfo ? binInfo->type : "");
+    setPlainText(ui->archEdit, binInfo ? binInfo->arch : "");
+    setPlainText(ui->langEdit, binInfo ? binInfo->lang : "");
+    setPlainText(ui->classEdit, binInfo ? binInfo->bclass : "");
+    setPlainText(ui->machineEdit, binInfo ? binInfo->machine : "");
+    setPlainText(ui->osEdit, binInfo ? binInfo->os : "");
+    setPlainText(ui->subsysEdit, binInfo ? binInfo->subsystem : "");
+    setPlainText(ui->compilerEdit, binInfo ? binInfo->compiler : "");
+    setPlainText(ui->bitsEdit, binInfo ? QString::number(binInfo->bits) : "");
+    setPlainText(ui->baddrEdit, bf ? RzAddressString(rz_bin_file_get_baddr(bf)) : "");
+    setPlainText(ui->sizeEdit, bf ? qhelpers::formatBytecount(bf->size) : "");
+    setPlainText(ui->fdEdit, bf ? QString::number(bf->fd) : "");
+
+    // Setting the value of "Endianness"
+    const char *endian = binInfo ? (binInfo->big_endian ? "BE" : "LE") : "";
+    setPlainText(this->ui->endianEdit, endian);
+
+    // Setting boolean values
+    setRzBinInfo(binInfo);
+
+    // Setting the value of "static"
+    int static_value = rz_bin_is_static(core->bin);
+    setPlainText(ui->staticEdit, tr(setBoolText(static_value)));
+
+    RzList *hashes = bf ? rz_bin_file_compute_hashes(core->bin, bf, UT64_MAX) : nullptr;
 
     // Delete hashesWidget if it isn't null to avoid duplicate components
     if (hashesWidget) {
@@ -110,22 +111,16 @@ void Dashboard::updateContents()
         hashesLayout->addRow(new QLabel(label), hashLineEdit);
     }
 
-    QJsonObject analinfo = Core()->cmdj("aaij").object();
-    setPlainText(ui->functionsLineEdit, QString::number(analinfo["fcns"].toInt()));
-    setPlainText(ui->xRefsLineEdit, QString::number(analinfo["xrefs"].toInt()));
-    setPlainText(ui->callsLineEdit, QString::number(analinfo["calls"].toInt()));
-    setPlainText(ui->stringsLineEdit, QString::number(analinfo["strings"].toInt()));
-    setPlainText(ui->symbolsLineEdit, QString::number(analinfo["symbols"].toInt()));
-    setPlainText(ui->importsLineEdit, QString::number(analinfo["imports"].toInt()));
-    setPlainText(ui->coverageLineEdit, QString::number(analinfo["covrage"].toInt()) + " bytes");
-    setPlainText(ui->codeSizeLineEdit, QString::number(analinfo["codesz"].toInt()) + " bytes");
-    setPlainText(ui->percentageLineEdit, QString::number(analinfo["percent"].toInt()) + "%");
-
-    QStringList libs = Core()->cmdList("il");
-    if (!libs.isEmpty()) {
-        libs.removeFirst();
-        libs.removeLast();
-    }
+    CutterJson analinfo = Core()->cmdj("aaij");
+    setPlainText(ui->functionsLineEdit, QString::number(analinfo["fcns"].toSt64()));
+    setPlainText(ui->xRefsLineEdit, QString::number(analinfo["xrefs"].toSt64()));
+    setPlainText(ui->callsLineEdit, QString::number(analinfo["calls"].toSt64()));
+    setPlainText(ui->stringsLineEdit, QString::number(analinfo["strings"].toSt64()));
+    setPlainText(ui->symbolsLineEdit, QString::number(analinfo["symbols"].toSt64()));
+    setPlainText(ui->importsLineEdit, QString::number(analinfo["imports"].toSt64()));
+    setPlainText(ui->coverageLineEdit, QString::number(analinfo["covrage"].toSt64()) + " bytes");
+    setPlainText(ui->codeSizeLineEdit, QString::number(analinfo["codesz"].toSt64()) + " bytes");
+    setPlainText(ui->percentageLineEdit, QString::number(analinfo["percent"].toSt64()) + "%");
 
     // dunno: why not label->setText(lines.join("\n")?
     while (ui->verticalLayout_2->count() > 0) {
@@ -140,25 +135,25 @@ void Dashboard::updateContents()
         }
     }
 
-    for (const QString &lib : libs) {
-        QLabel *label = new QLabel(this);
-        label->setText(lib);
-        label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        ui->verticalLayout_2->addWidget(label);
+    const RzList *libs = bf ? rz_bin_object_get_libs(bf->o) : nullptr;
+    if (libs) {
+        for (const auto &lib : CutterRzList<char>(libs)) {
+            auto *label = new QLabel(this);
+            label->setText(lib);
+            label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+            label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            ui->verticalLayout_2->addWidget(label);
+        }
     }
 
     QSpacerItem *spacer = new QSpacerItem(1, 1, QSizePolicy::Fixed, QSizePolicy::Expanding);
     ui->verticalLayout_2->addSpacerItem(spacer);
 
-    // Get stats for the graphs
-    QStringList stats = Core()->getStats();
-
     // Check if signature info and version info available
     if (Core()->getSignatureInfo().isEmpty()) {
         ui->certificateButton->setEnabled(false);
     }
-    if (Core()->getFileVersionInfo().isEmpty()) {
+    if (!Core()->getFileVersionInfo().size()) {
         ui->versioninfoButton->setEnabled(false);
     }
 }
@@ -173,8 +168,7 @@ void Dashboard::on_certificateButton_clicked()
         viewDialog = new QDialog(this);
         view = new CutterTreeView(viewDialog);
         model = new JsonModel();
-        QJsonDocument qjsonCertificatesDoc = Core()->getSignatureInfo();
-        qstrCertificates = qjsonCertificatesDoc.toJson(QJsonDocument::Compact);
+        qstrCertificates = Core()->getSignatureInfo();
     }
     if (!viewDialog->isVisible()) {
         std::string strCertificates = qstrCertificates.toUtf8().constData();
@@ -226,19 +220,26 @@ void Dashboard::setPlainText(QLineEdit *textBox, const QString &text)
 }
 
 /**
- * @brief Set the text of a QLineEdit as True, False or N/A if it does not exist
- * @param textBox
- * @param isTrue
+ * @brief Setting boolean values of binary information in dashboard
+ * @param RzBinInfo
  */
-void Dashboard::setBool(QLineEdit *textBox, const QJsonObject &jsonObject, const QString &key)
+void Dashboard::setRzBinInfo(RzBinInfo *binInfo)
 {
-    if (jsonObject.contains(key)) {
-        if (jsonObject[key].toBool()) {
-            setPlainText(textBox, tr("True"));
-        } else {
-            setPlainText(textBox, tr("False"));
-        }
-    } else {
-        setPlainText(textBox, tr("N/A"));
-    }
+    setPlainText(ui->vaEdit, binInfo ? setBoolText(binInfo->has_va) : "");
+    setPlainText(ui->canaryEdit, binInfo ? setBoolText(binInfo->has_canary) : "");
+    setPlainText(ui->cryptoEdit, binInfo ? setBoolText(binInfo->has_crypto) : "");
+    setPlainText(ui->nxEdit, binInfo ? setBoolText(binInfo->has_nx) : "");
+    setPlainText(ui->picEdit, binInfo ? setBoolText(binInfo->has_pi) : "");
+    setPlainText(ui->strippedEdit,
+                 binInfo ? setBoolText(RZ_BIN_DBG_STRIPPED & binInfo->dbg_info) : "");
+    setPlainText(ui->relocsEdit, binInfo ? setBoolText(RZ_BIN_DBG_RELOCS & binInfo->dbg_info) : "");
+}
+
+/**
+ * @brief Set the text of a QLineEdit as True, False
+ * @param boolean value
+ */
+const char *Dashboard::setBoolText(bool value)
+{
+    return value ? "True" : "False";
 }

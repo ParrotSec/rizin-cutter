@@ -2,6 +2,7 @@
 #include "Cutter.h"
 #include "Configuration.h"
 #include "dialogs/WriteCommandsDialogs.h"
+#include "dialogs/CommentsDialog.h"
 
 #include <QPainter>
 #include <QPaintEvent>
@@ -120,6 +121,20 @@ HexWidget::HexWidget(QWidget *parent)
     connect(actionCopyAddress, &QAction::triggered, this, &HexWidget::copyAddress);
     addAction(actionCopyAddress);
 
+    // Add comment option
+    actionComment = new QAction(tr("Add Comment"), this);
+    actionComment->setShortcutContext(Qt::ShortcutContext::WidgetWithChildrenShortcut);
+    actionComment->setShortcut(Qt::Key_Semicolon);
+    connect(actionComment, &QAction::triggered, this, &HexWidget::on_actionAddComment_triggered);
+    addAction(actionComment);
+
+    // delete comment option
+    actionDeleteComment = new QAction(tr("Delete Comment"), this);
+    actionDeleteComment->setShortcutContext(Qt::ShortcutContext::WidgetWithChildrenShortcut);
+    connect(actionDeleteComment, &QAction::triggered, this,
+            &HexWidget::on_actionDeleteComment_triggered);
+    addAction(actionDeleteComment);
+
     actionSelectRange = new QAction(tr("Select range"), this);
     connect(actionSelectRange, &QAction::triggered, this,
             [this]() { rangeDialog.open(cursor.address); });
@@ -147,7 +162,11 @@ HexWidget::HexWidget(QWidget *parent)
     connect(actionWrite64, &QAction::triggered, this, &HexWidget::w_write64);
     actionsWriteString.append(actionWrite64);
 
-    actionsWriteOther.reserve(4);
+    actionsWriteOther.reserve(5);
+    QAction *actionWriteBytes = new QAction(tr("Write hex bytes"), this);
+    connect(actionWriteBytes, &QAction::triggered, this, &HexWidget::w_writeBytes);
+    actionsWriteOther.append(actionWriteBytes);
+
     QAction *actionWriteZeros = new QAction(tr("Write zeros"), this);
     connect(actionWriteZeros, &QAction::triggered, this, &HexWidget::w_writeZeros);
     actionsWriteOther.append(actionWriteZeros);
@@ -616,6 +635,16 @@ void HexWidget::contextMenuEvent(QContextMenuEvent *event)
         actionCopyAddress->setDisabled(disable);
     };
 
+    QString comment = Core()->getCommentAt(cursor.address);
+
+    if (comment.isNull() || comment.isEmpty()) {
+        actionDeleteComment->setVisible(false);
+        actionComment->setText(tr("Add Comment"));
+    } else {
+        actionDeleteComment->setVisible(true);
+        actionComment->setText(tr("Edit Comment"));
+    }
+
     QMenu *menu = new QMenu();
     QMenu *sizeMenu = menu->addMenu(tr("Item size:"));
     sizeMenu->addActions(actionsItemSize);
@@ -663,16 +692,10 @@ void HexWidget::copy()
     if (selection.isEmpty() || selection.size() > MAX_COPY_SIZE)
         return;
 
-    QClipboard *clipboard = QApplication::clipboard();
-    if (cursorOnAscii) {
-        clipboard->setText(
-                Core()->cmdRawAt(QString("psx %1").arg(selection.size()), selection.start())
-                        .trimmed());
-    } else {
-        clipboard->setText(Core()->cmdRawAt(QString("p8 %1").arg(selection.size()),
-                                            selection.start())
-                                   .trimmed()); // TODO: copy in the format shown
-    }
+    auto x = cursorOnAscii
+            ? Core()->getString(selection.start(), selection.size(), RZ_STRING_ENC_8BIT, true)
+            : Core()->ioRead(selection.start(), (int)selection.size()).toHex();
+    QApplication::clipboard()->setText(x);
 }
 
 void HexWidget::copyAddress()
@@ -683,6 +706,20 @@ void HexWidget::copyAddress()
     }
     QClipboard *clipboard = QApplication::clipboard();
     clipboard->setText(RzAddressString(addr));
+}
+
+// slot for add comment action
+void HexWidget::on_actionAddComment_triggered()
+{
+    uint64_t addr = cursor.address;
+    CommentsDialog::addOrEditComment(addr, this);
+}
+
+// slot for deleting comment action
+void HexWidget::on_actionDeleteComment_triggered()
+{
+    uint64_t addr = cursor.address;
+    Core()->delComment(addr);
 }
 
 void HexWidget::onRangeDialogAccepted()
@@ -700,14 +737,16 @@ void HexWidget::w_writeString()
         return;
     }
     bool ok = false;
-    QInputDialog d;
-    d.setInputMode(QInputDialog::InputMode::TextInput);
-    QString str = d.getText(this, tr("Write string"), tr("String:"), QLineEdit::Normal, "", &ok);
-    if (ok && !str.isEmpty()) {
+    QString str = QInputDialog::getText(this, tr("Write string"), tr("String:"), QLineEdit::Normal,
+                                        "", &ok);
+    if (!ok || str.isEmpty()) {
+        return;
+    }
+    {
         RzCoreLocked core(Core());
         rz_core_write_string_at(core, getLocationAddress(), str.toUtf8().constData());
-        refresh();
     }
+    refresh();
 }
 
 void HexWidget::w_increaseDecrease()
@@ -722,11 +761,49 @@ void HexWidget::w_increaseDecrease()
     }
     int64_t value = (int64_t)d.getValue();
     uint8_t sz = d.getNBytes();
-    if (!d.getMode() == IncrementDecrementDialog::Increase) {
+    if (d.getMode() == IncrementDecrementDialog::Decrease) {
         value *= -1;
     }
-    RzCoreLocked core(Core());
-    rz_core_write_value_inc_at(core, getLocationAddress(), value, sz);
+    {
+        RzCoreLocked core(Core());
+        rz_core_write_value_inc_at(core, getLocationAddress(), value, sz);
+    }
+    refresh();
+}
+
+void HexWidget::w_writeBytes()
+{
+    if (!ioModesController.prepareForWriting()) {
+        return;
+    }
+    bool ok = false;
+
+    int size = INT_MAX;
+    if (!selection.isEmpty() && selection.size() <= INT_MAX) {
+        size = static_cast<int>(selection.size());
+    }
+
+    QByteArray bytes = QInputDialog::getText(this, tr("Write hex bytes"), tr("Hex byte string:"),
+                                             QLineEdit::Normal, "", &ok)
+                               .toUtf8();
+    const int offset = bytes.startsWith("\\x") ? 2 : 0;
+    const int incr = offset + 2;
+    const int bytes_size = qMin(bytes.size() / incr, size);
+    if (!ok || !bytes_size) {
+        return;
+    }
+    {
+        auto *buf = (uint8_t *)malloc(static_cast<size_t>(bytes_size));
+        if (!buf) {
+            return;
+        }
+        for (int i = 0, j = 0, sz = bytes.size(); i < sz; i += incr, j++) {
+            buf[j] = static_cast<uint8_t>(bytes.mid(i + offset, 2).toInt(nullptr, 16));
+        }
+        RzCoreLocked core(Core());
+        rz_core_write_at(core, getLocationAddress(), buf, bytes_size);
+        free(buf);
+    }
     refresh();
 }
 
@@ -735,24 +812,25 @@ void HexWidget::w_writeZeros()
     if (!ioModesController.prepareForWriting()) {
         return;
     }
-    bool ok = false;
-    QInputDialog d;
 
     int size = 1;
     if (!selection.isEmpty() && selection.size() <= INT_MAX) {
         size = static_cast<int>(selection.size());
     }
 
-    int len =
-            d.getInt(this, tr("Write zeros"), tr("Number of zeros:"), size, 1, 0x7FFFFFFF, 1, &ok);
-    if (ok) {
+    bool ok = false;
+    int len = QInputDialog::getInt(this, tr("Write zeros"), tr("Number of zeros:"), size, 1,
+                                   0x7FFFFFFF, 1, &ok);
+    if (!ok) {
+        return;
+    }
+    {
         RzCoreLocked core(Core());
-        uint8_t *buf = (uint8_t *)calloc(len, sizeof(uint8_t));
+        auto *buf = (uint8_t *)calloc(len, sizeof(uint8_t));
         rz_core_write_at(core, getLocationAddress(), buf, len);
         free(buf);
-
-        refresh();
     }
+    refresh();
 }
 
 void HexWidget::w_write64()
@@ -777,11 +855,13 @@ void HexWidget::w_write64()
         return;
     }
 
-    RzCoreLocked core(Core());
-    if (d.getMode() == Base64EnDecodedWriteDialog::Encode) {
-        rz_core_write_base64_at(core, getLocationAddress(), str.toHex().constData());
-    } else {
-        rz_core_write_base64d_at(core, getLocationAddress(), str.constData());
+    {
+        RzCoreLocked core(Core());
+        if (d.getMode() == Base64EnDecodedWriteDialog::Encode) {
+            rz_core_write_base64_at(core, getLocationAddress(), str.toHex().constData());
+        } else {
+            rz_core_write_base64d_at(core, getLocationAddress(), str.constData());
+        }
     }
     refresh();
 }
@@ -791,19 +871,24 @@ void HexWidget::w_writeRandom()
     if (!ioModesController.prepareForWriting()) {
         return;
     }
-    bool ok = false;
-    QInputDialog d;
 
     int size = 1;
     if (!selection.isEmpty() && selection.size() <= INT_MAX) {
         size = static_cast<int>(selection.size());
     }
-    QString nbytes = QString::number(d.getInt(this, tr("Write random"), tr("Number of bytes:"),
-                                              size, 1, 0x7FFFFFFF, 1, &ok));
-    if (ok && !nbytes.isEmpty()) {
-        Core()->cmdRawAt(QString("wr %1").arg(nbytes), getLocationAddress());
-        refresh();
+
+    bool ok = false;
+    int nbytes = QInputDialog::getInt(this, tr("Write random"), tr("Number of bytes:"), size, 1,
+                                      0x7FFFFFFF, 1, &ok);
+    if (!ok) {
+        return;
     }
+
+    {
+        RzCoreLocked core(Core());
+        rz_core_write_random_at(core, getLocationAddress(), nbytes);
+    }
+    refresh();
 }
 
 void HexWidget::w_duplFromOffset()
@@ -816,9 +901,12 @@ void HexWidget::w_duplFromOffset()
     if (ret == QDialog::Rejected) {
         return;
     }
-    RVA copyFrom = d.getOffset();
-    QString nBytes = QString::number(d.getNBytes());
-    Core()->cmdRawAt(QString("wd %1 %2").arg(copyFrom).arg(nBytes), getLocationAddress());
+    RVA src = d.getOffset();
+    int len = (int)d.getNBytes();
+    {
+        RzCoreLocked core(Core());
+        rz_core_write_duplicate_at(core, getLocationAddress(), src, len);
+    }
     refresh();
 }
 
@@ -828,14 +916,16 @@ void HexWidget::w_writePascalString()
         return;
     }
     bool ok = false;
-    QInputDialog d;
-    d.setInputMode(QInputDialog::InputMode::TextInput);
-    QString str =
-            d.getText(this, tr("Write Pascal string"), tr("String:"), QLineEdit::Normal, "", &ok);
-    if (ok && !str.isEmpty()) {
-        Core()->cmdRawAt(QString("ws %1").arg(str), getLocationAddress());
-        refresh();
+    QString str = QInputDialog::getText(this, tr("Write Pascal string"), tr("String:"),
+                                        QLineEdit::Normal, "", &ok);
+    if (!ok || str.isEmpty()) {
+        return;
     }
+    {
+        RzCoreLocked core(Core());
+        rz_core_write_length_string_at(core, getLocationAddress(), str.toUtf8().constData());
+    }
+    refresh();
 }
 
 void HexWidget::w_writeWideString()
@@ -844,14 +934,16 @@ void HexWidget::w_writeWideString()
         return;
     }
     bool ok = false;
-    QInputDialog d;
-    d.setInputMode(QInputDialog::InputMode::TextInput);
-    QString str =
-            d.getText(this, tr("Write wide string"), tr("String:"), QLineEdit::Normal, "", &ok);
-    if (ok && !str.isEmpty()) {
-        Core()->cmdRawAt(QString("ww %1").arg(str), getLocationAddress());
-        refresh();
+    QString str = QInputDialog::getText(this, tr("Write wide string"), tr("String:"),
+                                        QLineEdit::Normal, "", &ok);
+    if (!ok || str.isEmpty()) {
+        return;
     }
+    {
+        RzCoreLocked core(Core());
+        rz_core_write_string_wide_at(core, getLocationAddress(), str.toUtf8().constData());
+    }
+    refresh();
 }
 
 void HexWidget::w_writeCString()
@@ -860,14 +952,16 @@ void HexWidget::w_writeCString()
         return;
     }
     bool ok = false;
-    QInputDialog d;
-    d.setInputMode(QInputDialog::InputMode::TextInput);
-    QString str = d.getText(this, tr("Write zero-terminated string"), tr("String:"),
-                            QLineEdit::Normal, "", &ok);
-    if (ok && !str.isEmpty()) {
-        Core()->cmdRawAt(QString("wz %1").arg(str), getLocationAddress());
-        refresh();
+    QString str = QInputDialog::getText(this, tr("Write zero-terminated string"), tr("String:"),
+                                        QLineEdit::Normal, "", &ok);
+    if (!ok || str.isEmpty()) {
+        return;
     }
+    {
+        RzCoreLocked core(Core());
+        rz_core_write_string_zero_at(core, getLocationAddress(), str.toUtf8().constData());
+    }
+    refresh();
 }
 
 void HexWidget::updateItemLength()

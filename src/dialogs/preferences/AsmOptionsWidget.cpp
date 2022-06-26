@@ -16,7 +16,7 @@ AsmOptionsWidget::AsmOptionsWidget(PreferencesDialog *dialog)
     ui->setupUi(this);
 
     ui->syntaxComboBox->blockSignals(true);
-    for (const auto &syntax : Core()->cmdList("e asm.syntax=?"))
+    for (const auto &syntax : Core()->getConfigOptions("asm.syntax"))
         ui->syntaxComboBox->addItem(syntax, syntax);
     ui->syntaxComboBox->blockSignals(false);
 
@@ -242,7 +242,7 @@ void AsmOptionsWidget::on_varsubCheckBox_toggled(bool checked)
     triggerAsmOptionsChanged();
 }
 
-void AsmOptionsWidget::on_previewCheckBox_toggled( bool checked )
+void AsmOptionsWidget::on_previewCheckBox_toggled(bool checked)
 {
     Config()->setPreviewValue(checked);
     triggerAsmOptionsChanged();
