@@ -6,3 +6,4 @@ src/menus/*.h /usr/include/librz-cutter/menus/
 src/plugins/*.h /usr/include/librz-cutter/plugins/
 src/widgets/*.h /usr/include/librz-cutter/widgets/
 src/CutterApplication.h /usr/include/librz-cutter/
+cmake/ usr/lib/x86_64-linux-gnu/
