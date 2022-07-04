@@ -39,6 +39,7 @@ Description: GUI for rizin reverse engineering framework
 
 Package: librizin-cutter-dev
 Architecture: any
+Section: libdevel
 Depends: ${misc:Depends}
 Description: GUI for rizin reverse engineering framework
  This package contains devel files from rizin-cutter
