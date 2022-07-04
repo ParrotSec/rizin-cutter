@@ -1,3 +1,11 @@
+rizin-cutter (2.1.0-rc2-0parrot3) parrot-updates; urgency=medium
+
+  * Remove cmake from install list. It must be generated cmake files
+  * Correct path of cutter's header
+  * Add section for librizin-dev
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Tue, 05 Jul 2022 04:46:00 +0700
+
 rizin-cutter (2.1.0-rc2-0parrot2) parrot-updates; urgency=medium
 
   * Add libstdc++-11-dev to build depend
