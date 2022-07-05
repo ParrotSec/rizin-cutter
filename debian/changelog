@@ -1,3 +1,9 @@
+rizin-cutter (2.1.0-0parrot1) parrot-updates; urgency=medium
+
+  * New upstream version 2.1.0
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Tue, 05 Jul 2022 14:42:07 +0700
+
 rizin-cutter (2.0.0-rc2-0parrot4) parrot-updates; urgency=medium
 
   * Fix watch file to allow non-rc version only
