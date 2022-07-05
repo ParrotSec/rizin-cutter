@@ -1,3 +1,9 @@
+rizin-cutter (2.1.0-rc2-0parrot4) parrot-updates; urgency=medium
+
+  * Fix watch file to allow non-rc version only
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Tue, 05 Jul 2022 14:40:53 +0700
+
 rizin-cutter (2.1.0-rc2-0parrot3) parrot-updates; urgency=medium
 
   * Remove cmake from install list. It must be generated cmake files
