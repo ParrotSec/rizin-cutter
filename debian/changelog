@@ -1,4 +1,4 @@
-rizin-cutter (2.1.0-rc2-0parrot4) parrot-updates; urgency=medium
+rizin-cutter (2.0.0-rc2-0parrot4) parrot-updates; urgency=medium
 
   * Fix watch file to allow non-rc version only
 
