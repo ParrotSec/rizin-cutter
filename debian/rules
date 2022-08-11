@@ -19,3 +19,6 @@ override_dh_auto_configure:
 		-DCUTTER_ENABLE_PYTHON_BINDINGS=ON
 
 
+override_dh_missing:
+	dh_prep --exclude=rizin-cutter --exclude=librizin-cutter-dev
+	dh_missing
