@@ -1,3 +1,9 @@
+rizin-cutter (2.3.1-1parrot1) parrot-updates; urgency=medium
+
+  * New upstream version 2.3.1
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Mon, 04 Sep 2023 05:07:24 +0700
+
 rizin-cutter (2.2.0-1parrot2) parrot-updates; urgency=medium
 
   * Remove old patch
