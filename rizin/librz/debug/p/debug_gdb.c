@@ -15,6 +15,13 @@ typedef struct {
 #define UNSUPPORTED 0
 #define SUPPORTED   1
 
+#define PROC_NAME_SZ   1024
+#define PROC_REGION_SZ 100
+// PROC_REGION_SZ - 2 (used for `0x`). Due to how RZ_STR_DEF works this can't be
+// computed.
+#define PROC_REGION_LEFT_SZ 98
+#define PROC_PERM_SZ        5
+
 typedef struct rz_debug_gdb_ctx_t {
 	RzIOGdb **origrziogdb;
 	libgdbr_t *desc;
@@ -48,7 +55,7 @@ static void check_connection(RzDebug *dbg) {
 	}
 }
 
-static int rz_debug_gdb_step(RzDebug *dbg) {
+static bool rz_debug_gdb_step(RzDebug *dbg) {
 	RzDebugGdbCtx *ctx = dbg->plugin_data;
 	check_connection(dbg);
 	if (!ctx->desc) {
@@ -189,7 +196,7 @@ static RzList /*<RzDebugMap *>*/ *rz_debug_gdb_map_get(RzDebug *dbg) { // TODO
 	int unk = 0, perm, i;
 	char *ptr, *pos_1;
 	size_t line_len;
-	char name[1024], region1[100], region2[100], perms[5];
+	char name[PROC_NAME_SZ + 1], region1[PROC_REGION_SZ + 1], region2[PROC_REGION_SZ + 1], perms[PROC_PERM_SZ + 1];
 	RzDebugMap *map = NULL;
 	region1[0] = region2[0] = '0';
 	region1[1] = region2[1] = 'x';
@@ -213,8 +220,8 @@ static RzList /*<RzDebugMap *>*/ *rz_debug_gdb_map_get(RzDebug *dbg) { // TODO
 		}
 		// We assume Linux target, for now, so -
 		// 7ffff7dda000-7ffff7dfd000 r-xp 00000000 08:05 265428 /usr/lib/ld-2.25.so
-		ret = sscanf(ptr, "%s %s %" PFMT64x " %*s %*s %[^\n]", &region1[2],
-			perms, &offset, name);
+		ret = sscanf(ptr, "%" RZ_STR_DEF(PROC_REGION_LEFT_SZ) "s %" RZ_STR_DEF(PROC_PERM_SZ) "s %" PFMT64x " %*s %*s %" RZ_STR_DEF(PROC_NAME_SZ) "[^\n]",
+			&region1[2], perms, &offset, name);
 		if (ret == 3) {
 			name[0] = '\0';
 		} else if (ret != 4) {
@@ -575,7 +582,7 @@ RzDebugPlugin rz_debug_plugin_gdb = {
 	.name = "gdb",
 	/* TODO: Add support for more architectures here */
 	.license = "LGPL3",
-	.arch = "x86,arm,sh,mips,avr,lm32,v850,ba2",
+	.arch = "x86,arm,sh,mips,avr,lm32,v850,ba2,tricore",
 	.bits = RZ_SYS_BITS_16 | RZ_SYS_BITS_32 | RZ_SYS_BITS_64,
 	.init = rz_debug_gdb_init,
 	.fini = rz_debug_gdb_fini,

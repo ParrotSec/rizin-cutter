@@ -27,6 +27,7 @@ RizinGraphWidget::RizinGraphWidget(MainWindow *main)
         { 'r', tr("References graph (agr)") },
         { 'R', tr("Global references graph (agR)") },
         { 'x', tr("Cross references graph (agx)") },
+        { 'I', tr("RzIL statement graph (agI)") },
         { 'g', tr("Custom graph (agg)") },
         { ' ', tr("User command") },
     };
@@ -96,7 +97,7 @@ void GenericRizinGraphView::loadCurrentGraph()
         return;
     }
 
-    CutterJson functionsDoc = Core()->cmdj(QString("%1j").arg(graphCommand));
+    CutterJson functionsDoc = Core()->cmdj(QString("%1 json").arg(graphCommand));
     auto nodes = functionsDoc["nodes"];
 
     for (CutterJson block : nodes) {
