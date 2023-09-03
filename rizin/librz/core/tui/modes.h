@@ -7,8 +7,8 @@
 #define NPF  5
 #define PIDX (RZ_ABS(((RzCoreVisual *)core->visual)->printidx % NPF))
 
-#define CMD_REGISTERS      "?== true `e cfg.debug`; ?! dr=; ?? ar=" // select dr= or ar= depending on cfg.debug
-#define CMD_REGISTERS_REFS "?== true `e cfg.debug`; ?! drr; ?? arr" // select drr or arr depending on cfg.debug
+#define CMD_REGISTERS      "%== true `e cfg.debug`; %! dr=; %% ar=" // select dr= or ar= depending on cfg.debug
+#define CMD_REGISTERS_REFS "%== true `e cfg.debug`; %! drr; %% arr" // select drr or arr depending on cfg.debug
 
 extern const char *printfmtSingle[NPF];
 extern const char *printfmtColumns[NPF];
@@ -16,7 +16,7 @@ extern const char *printfmtColumns[NPF];
 // to print the stack in the debugger view
 #define PRINT_HEX_FORMATS 10
 #define PRINT_3_FORMATS   2
-#define PRINT_4_FORMATS   7
+#define PRINT_4_FORMATS   5
 #define PRINT_5_FORMATS   8
 
 extern const char *printHexFormats[PRINT_HEX_FORMATS];

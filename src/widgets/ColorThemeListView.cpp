@@ -128,8 +128,8 @@ void ColorOptionDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     painter->setPen(qApp->palette().text().color());
 
     QFontMetrics fm2 = QFontMetrics(painter->font());
-    QString name = fm2.elidedText(optionInfoMap__[currCO.optionName].displayingtext,
-            Qt::ElideRight, optionNameRect.width());
+    QString name = fm2.elidedText(optionInfoMap__[currCO.optionName].displayingtext, Qt::ElideRight,
+                                  optionNameRect.width());
     painter->drawText(optionNameRect, name);
 
     QPainterPath roundedOptionRect;
@@ -157,9 +157,9 @@ void ColorOptionDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     painter->fillPath(roundedColorRect, currCO.color);
 
     QFontMetrics fm3 = QFontMetrics(painter->font());
-    QString desc = fm3.elidedText(
-            currCO.optionName + ": " + optionInfoMap__[currCO.optionName].info, Qt::ElideRight,
-            descTextRect.width());
+    QString desc =
+            fm3.elidedText(currCO.optionName + ": " + optionInfoMap__[currCO.optionName].info,
+                           Qt::ElideRight, descTextRect.width());
     painter->setPen(qApp->palette().text().color());
     painter->setBrush(qApp->palette().text());
     painter->drawText(descTextRect, desc);
@@ -400,8 +400,7 @@ const QMap<QString, OptionInfo> optionInfoMap__ = {
     { "fname", { QObject::tr("Color of names of functions"), QObject::tr("Function name") } },
     { "floc", { QObject::tr("Color of function location"), QObject::tr("Function location") } },
     { "fline",
-      { QObject::tr(
-                "Color of ascii line in left side that shows what opcodes are belong to function"),
+      { QObject::tr("Color of the line which shows which opcodes belongs to a function"),
         QObject::tr("Function line") } },
     { "flag",
       { QObject::tr("Color of flags (similar to bookmarks for offset)"), QObject::tr("Flag") } },

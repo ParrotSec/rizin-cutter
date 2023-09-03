@@ -143,8 +143,8 @@ Configuration::Configuration() : QObject(), nativePalette(qApp->palette())
     mPtr = this;
     if (!s.isWritable()) {
         QMessageBox::critical(
-                nullptr, tr("Critical!"),
-                tr("!!! Settings are not writable! Make sure you have a write access to \"%1\"")
+                nullptr, tr("Critical Error!"),
+                tr("Settings are not writable! Make sure you have a write access to \"%1\".")
                         .arg(s.fileName()));
     }
 #ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
@@ -781,6 +781,16 @@ void Configuration::setPreviewValue(bool checked)
 bool Configuration::getPreviewValue() const
 {
     return s.value("asm.preview").toBool();
+}
+
+void Configuration::setShowVarTooltips(bool enabled)
+{
+    s.setValue("showVarTooltips", enabled);
+}
+
+bool Configuration::getShowVarTooltips() const
+{
+    return s.value("showVarTooltips").toBool();
 }
 
 bool Configuration::getGraphBlockEntryOffset()
