@@ -196,18 +196,20 @@ RZ_IPI RzCmdStatus rz_seek_base_handler(RzCore *core, int argc, const char **arg
 }
 
 RZ_IPI RzCmdStatus rz_seek_blocksize_backward_handler(RzCore *core, int argc, const char **argv) {
-	int n = 1;
-	if (argc == 2) {
-		n = rz_num_math(core->num, argv[1]);
+	int n = argc == 2 ? rz_num_math(core->num, argv[1]) : 1;
+	if (n < 1) {
+		RZ_LOG_ERROR("invalid argument: number is negative or zero\n");
+		return RZ_CMD_STATUS_ERROR;
 	}
 	int delta = -core->blocksize / n;
 	return bool2cmdstatus(rz_core_seek_delta(core, delta, true));
 }
 
 RZ_IPI RzCmdStatus rz_seek_blocksize_forward_handler(RzCore *core, int argc, const char **argv) {
-	int n = 1;
-	if (argc == 2) {
-		n = rz_num_math(core->num, argv[1]);
+	int n = argc == 2 ? rz_num_math(core->num, argv[1]) : 1;
+	if (n < 1) {
+		RZ_LOG_ERROR("invalid argument: number is negative or zero\n");
+		return RZ_CMD_STATUS_ERROR;
 	}
 	int delta = core->blocksize / n;
 	return bool2cmdstatus(rz_core_seek_delta(core, delta, true));
@@ -281,6 +283,7 @@ RZ_IPI RzCmdStatus rz_seek_history_list_handler(RzCore *core, int argc, const ch
 		free(name);
 	}
 	rz_cmd_state_output_array_end(state);
+	rz_list_free(list);
 	return RZ_CMD_STATUS_OK;
 }
 
@@ -334,8 +337,16 @@ RZ_IPI RzCmdStatus rz_seek_begin_handler(RzCore *core, int argc, const char **ar
 
 RZ_IPI RzCmdStatus rz_seek_end_handler(RzCore *core, int argc, const char **argv) {
 	RzIOMap *map = rz_io_map_get(core->io, core->offset);
-	// XXX: this +2 is a hack. must fix gap between sections
-	ut64 addr = map ? map->itv.addr + map->itv.size + 2 : rz_io_fd_size(core->io, core->file->fd);
+	ut64 addr;
+	if (map) {
+		// XXX: this +2 is a hack. must fix gap between sections
+		addr = map->itv.addr + map->itv.size + 2;
+	} else {
+		if (!core->file) {
+			return RZ_CMD_STATUS_ERROR;
+		}
+		addr = rz_io_fd_size(core->io, core->file->fd);
+	}
 	return bool2cmdstatus(rz_core_seek_and_save(core, addr, true));
 }
 

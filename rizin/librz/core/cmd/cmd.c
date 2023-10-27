@@ -908,12 +908,24 @@ RZ_IPI RzCmdStatus rz_push_escaped_handler(RzCore *core, int argc, const char **
 	return res;
 }
 
+static RzCmdStatus pointer_read(RzCore *core, const char *expr) {
+	ut64 n = rz_num_math(core->num, expr);
+	if (core->num->dbz) {
+		RZ_LOG_ERROR("core: RzNum ERROR: Division by Zero\n");
+		return RZ_CMD_STATUS_ERROR;
+	}
+	if (!rz_io_read_i(core->io, n, &n, core->rasm->bits / 8, core->print->big_endian)) {
+		return RZ_CMD_STATUS_ERROR;
+	}
+	rz_cons_printf("0x%" PFMT64x "\n", n);
+	return RZ_CMD_STATUS_OK;
+}
+
 RZ_IPI RzCmdStatus rz_pointer_handler(RzCore *core, int argc, const char **argv) {
 	int ret;
 	switch (argc) {
 	case 2:
-		ret = rz_core_cmdf(core, "?v [%s]", argv[1]);
-		return rz_cmd_int2status(ret);
+		return pointer_read(core, argv[1]);
 	case 3:
 		if (rz_str_startswith(argv[2], "0x")) {
 			ret = rz_core_cmdf(core, "wv %s @ %s", argv[2], argv[1]);
@@ -1848,7 +1860,7 @@ next2:
 			if (ptr[1] == '!') {
 				str = rz_core_cmd_str_pipe(core, ptr + 1);
 			} else {
-				// Color disabled when doing backticks ?e `pi 1`
+				// Color disabled when doing backticks echo `pi 1`
 				int ocolor = rz_config_get_i(core->config, "scr.color");
 				rz_config_set_i(core->config, "scr.color", 0);
 				core->cmd_in_backticks = true;
@@ -3682,6 +3694,7 @@ DEFINE_HANDLE_TS_FCN_AND_SYMBOL(arged_stmt) {
 err:
 	RZ_LOG_DEBUG("arged_stmt finished command: '%s'\n", command_str);
 	rz_cmd_parsed_args_free(pr_args);
+	free(command_extra_str);
 	free(command_str);
 	return res;
 }
@@ -3937,11 +3950,13 @@ DEFINE_HANDLE_TS_FCN_AND_SYMBOL(help_stmt) {
 	if (node_str_len >= 2 && !strcmp(node_string + node_str_len - 2, "?*")) {
 		node_string[node_str_len - 2] = 0;
 		const char *argv[2] = { NULL, node_string };
-		return rz_cmd_help_search_handler(state->core, 2, argv, RZ_OUTPUT_MODE_STANDARD);
+		int argc = node_str_len > 2 ? 2 : 1;
+		return rz_cmd_help_search_handler(state->core, argc, argv, RZ_OUTPUT_MODE_STANDARD);
 	} else if (node_str_len >= 3 && !strcmp(node_string + node_str_len - 3, "?*j")) {
 		node_string[node_str_len - 3] = 0;
 		const char *argv[2] = { NULL, node_string };
-		return rz_cmd_help_search_handler(state->core, 2, argv, RZ_OUTPUT_MODE_JSON);
+		int argc = node_str_len > 2 ? 2 : 1;
+		return rz_cmd_help_search_handler(state->core, argc, argv, RZ_OUTPUT_MODE_JSON);
 	}
 
 	TSNode command = ts_node_child_by_field_name(node, "command", strlen("command"));
@@ -4358,6 +4373,7 @@ DEFINE_HANDLE_TS_FCN_AND_SYMBOL(iter_flags_stmt) {
 	if (!ts_node_is_null(arg)) {
 		arg_str = ts_node_handle_arg(state, node, arg, 1);
 	}
+	ut64 offorig = core->offset;
 	const RzSpace *flagspace = rz_flag_space_cur(core->flags);
 	RzFlagItem *flag;
 	RzListIter *iter;
@@ -4391,6 +4407,7 @@ DEFINE_HANDLE_TS_FCN_AND_SYMBOL(iter_flags_stmt) {
 
 err:
 	rz_list_free(match_flag_items);
+	rz_core_seek(core, offorig, true);
 	free(arg_str);
 	return ret;
 }
