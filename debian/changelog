@@ -1,3 +1,9 @@
+rizin-cutter (2.3.1-1parrot2) parrot-updates; urgency=medium
+
+  * Change uscan URL to Github's API
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Sat, 28 Oct 2023 02:43:18 +0700
+
 rizin-cutter (2.3.1-1parrot1) parrot-updates; urgency=medium
 
   * New upstream version 2.3.1
