@@ -1,5 +1,5 @@
 project('rizin', 'c',
-  version: 'v0.6.2',
+  version: 'v0.7.0',
   license: 'LGPL3',
   meson_version: '>=0.55.0',
   default_options: [
@@ -175,7 +175,7 @@ cmake_package_relative_path = run_command(py3_exe, cmake_package_prefix_dir_py, 
 subproject_clean_error_msg = 'Subprojects are not updated. Please run `git clean -dxff subprojects/` to delete all local subprojects directories. If you want to compile against current subprojects then set option `subprojects_check=false`.'
 
 # handle capstone dependency
-capstone_dep = dependency('capstone', version: '>=3.0.4', required: get_option('use_sys_capstone'), static: is_static_build)
+capstone_dep = dependency('capstone', version: '>=4.0.2', required: get_option('use_sys_capstone'), static: is_static_build)
 if not capstone_dep.found()
   capstone_version = get_option('use_capstone_version')
   if fs.is_file('subprojects/capstone-' + capstone_version + '.wrap')
@@ -188,6 +188,33 @@ if not capstone_dep.found()
     error('Wrong capstone version selected. Please use one of the supported versions.')
   endif
   capstone_dep = capstone_proj.get_variable('capstone_dep')
+else
+  # Package managers CS version has no meta programming macros for AArch64 -> ARM64 renaming
+  # (because it is outdated).
+  # With this define we includeour copy of those macros.
+  add_project_arguments(['-DUSE_SYS_CAPSTONE'], language: 'c')
+endif
+
+# Handle PCRE2
+cpu_jit_supported = [ 'aarch64', 'arm', 'mips', 'mips64', 'ppc', 'ppc64', 'riscv32', 'riscv64', 's390x', 'x86', 'x86_64' ]
+pcre2_jit_supported = target_machine.cpu_family() in cpu_jit_supported and cc.get_id() != 'tcc'
+if pcre2_jit_supported
+  add_project_arguments(['-DSUPPORTS_PCRE2_JIT'], language: 'c')
+endif
+
+pcre2_dep_opt = get_option('use_sys_pcre2')
+pcre2_dep = disabler()
+if (pcre2_dep_opt.enabled() or pcre2_dep_opt.auto()) and not meson.is_cross_build()
+  pcre2_dep = dependency('libpcre2-8', required: false, static: true)
+  if not pcre2_dep.found()
+    pcre2_dep = cc.find_library('pcre2', required: true, static: true)
+  endif
+else
+  pcre2_dep = dependency('pcre2', version: '>=10.42', required: true, static: true)
+endif
+
+if meson.is_cross_build()
+  pcre2_native_dep = dependency('pcre2_cross_native', required: true, static: true, native: true)
 endif
 
 # handle magic library
@@ -327,11 +354,15 @@ foreach it : ccs
   if have_lrt and not it_lrt.found()
     it_lrt = it_cc.find_library('rt', required: true, static: is_static_build)
   endif
+  # FreeBSD has backtrace() in libexecinfo
+  it_lexecinfo = it_cc.find_library('execinfo', required: false)
 
   it_userconf.set('RZ_CHECKS_LEVEL', checks_level)
   it_userconf.set10('IS_PORTABLE', get_option('portable'))
   it_userconf.set10('HAVE_LIB_MAGIC', sys_magic.found())
   it_userconf.set10('USE_LIB_MAGIC', sys_magic.found())
+  it_userconf.set10('HAVE_LIB_PCRE2', pcre2_dep.found())
+  it_userconf.set10('USE_LIB_PCRE2', pcre2_dep.found())
   it_userconf.set10('HAVE_LIB_XXHASH', xxhash_dep.found())
   it_userconf.set10('USE_LIB_XXHASH', xxhash_dep.found())
   it_userconf.set10('DEBUGGER', has_debugger)
@@ -373,6 +404,7 @@ foreach it : ccs
   it_userconf.set10('HAVE_PTHREAD', have_pthread)
   it_userconf.set10('HAVE_LZMA', get_option('use_lzma'))
   it_userconf.set10('HAVE_ZLIB', get_option('use_zlib'))
+  it_userconf.set10('SUPPORTS_PCRE2_JIT', pcre2_jit_supported)
 
   if it_machine.system() == 'freebsd' or it_machine.system() == 'dragonfly'
     add_project_link_arguments('-Wl,--unresolved-symbols,ignore-in-object-files', language: 'c', native: it_native)
@@ -402,6 +434,7 @@ foreach it : ccs
   message('IS_IOS: @0@'.format(is_ios))
 
   foreach item : [
+      ['arc4random', '#include <stdlib.h>', []],
       ['arc4random_uniform', '#include <stdlib.h>', []],
       ['explicit_bzero', '#include <string.h>', []],
       ['explicit_memset', '#include <string.h>', []],
@@ -427,10 +460,11 @@ foreach it : ccs
       ['pipe2', '#define _GNU_SOURCE\n#include <fcntl.h>\n#include <unistd.h>', []],
       # copy_file_range for now disable on freebsd as it s not reliable even for small chunks
       ['copy_file_range', '#ifdef __linux__\n#define _GNU_SOURCE\n#include <unistd.h>\n#endif', []],
-      ['backtrace', '', []],
+      ['backtrace', '', [it_lexecinfo]],
       ['__builtin_bswap16', '', []],
       ['__builtin_bswap32', '', []],
       ['__builtin_bswap64', '', []],
+      ['__builtin_clzll', '', []],
       ['posix_memalign', '#include <stdlib.h>', []],
       ['_aligned_malloc', '#include <malloc.h>', []],
     ]
@@ -574,6 +608,22 @@ if not libzip_dep.found()
     'use_sys_openssl=@0@'.format(get_option('use_sys_libzip_openssl')),
   ])
   libzip_dep = libzip_proj.get_variable('libzip_dep')
+endif
+
+# handle zstd dependency
+r = run_command(py3_exe, check_meson_subproject_py, 'zstd', check: false)
+if r.returncode() == 1 and get_option('subprojects_check')
+  error(subproject_clean_error_msg)
+endif
+
+libzstd_dep = dependency('libzstd', required: get_option('use_sys_libzstd'), static: is_static_build, fallback: [])
+if not libzstd_dep.found()
+  zstd_proj = subproject('zstd', default_options: [
+      'default_library=static',
+      'static_runtime=@0@'.format(is_static_build),
+  ])
+  libzstd_dep = zstd_proj.get_variable('libzstd_dep')
+  meson.override_dependency('zstd', libzstd_dep)
 endif
 
 # handle mpc dependency
@@ -724,7 +774,10 @@ summary({
   'Swift demangler': get_option('use_swift_demangler'),
   'Debugger enabled': has_debugger,
   'Capstone version': capstone_dep.version(),
+  'PCRE2 version': pcre2_dep.version(),
+  'PCRE2 JIT': pcre2_jit_supported,
   'System magic library': sys_magic.found() and sys_magic.type_name() != 'internal',
+  'System pcre2 library': pcre2_dep.found() and pcre2_dep.type_name() != 'internal',
   'System xxhash library': xxhash_dep.found() and xxhash_dep.type_name() != 'internal',
   'System libmspack library': libmspack_dep.found() and libmspack_dep.type_name() != 'internal',
   'System openssl library': sys_openssl.found() and sys_openssl.type_name() != 'internal',
@@ -733,6 +786,7 @@ summary({
   'System lz4 library': lz4_dep.found() and lz4_dep.type_name() != 'internal',
   'System lzma library': liblzma_dep.found() and liblzma_dep.type_name() != 'internal',
   'System zlib library': zlib_dep.found() and zlib_dep.type_name() != 'internal',
+  'System zstd library': libzstd_dep.found() and libzstd_dep.type_name() != 'internal',
   'System zip library': libzip_dep.found() and libzip_dep.type_name() != 'internal',
   'Use ptrace-wrap': use_ptrace_wrap,
   'Use RPATH': rpath_summary,
