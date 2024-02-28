@@ -343,10 +343,10 @@ afl
 EOF
 EXPECT=<<EOF
 0x00401000    1 59           main
-0x004010e4    4 148          fcn.004010e4
-0x004010c7    1 29           fcn.004010c7
-0x0040104a    4 109          fcn.0040104a
 0x0040103b    6 1024 -> 277  fcn.0040103b
+0x0040104a    4 109          fcn.0040104a
+0x004010c7    1 29           fcn.004010c7
+0x004010e4    4 148          fcn.004010e4
 0x00404ad7    1 8            fcn.00404ad7
 EOF
 RUN
@@ -361,10 +361,10 @@ afl
 EOF
 EXPECT=<<EOF
 0x00401000    1 59           main
-0x004010e4    4 148          root.004010e4
-0x004010c7    1 29           root.004010c7
-0x0040104a    4 109          root.0040104a
 0x0040103b    6 1024 -> 277  root.0040103b
+0x0040104a    4 109          root.0040104a
+0x004010c7    1 29           root.004010c7
+0x004010e4    4 148          root.004010e4
 0x00404ad7    1 8            root.00404ad7
 EOF
 RUN
@@ -4223,7 +4223,7 @@ pd 10 @ 0x08049410
 EOF
 EXPECT=<<EOF
 / int main(int argc, char **argv, char **envp);
-|           0x080491ca     0            lea   ecx, [argv]
+|           0x080491ca     0            lea   ecx, [argc]
 |           0x080491ce     0            and   esp, 0xfffffff0
 |           0x080491d1     0 -= 4       push  dword [ecx - 4]
 |           0x080491d4    -4 -= 4       push  ebp

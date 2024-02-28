@@ -109,7 +109,13 @@ RZ_API int rz_cons_arrow_to_hjkl(int ch) {
 			ch = rz_cons_readchar();
 		}
 #else
-		ch = 0xf1 + (ch & 0xf);
+		switch (ch) { // Arrow keys
+		case 'A': ch = 'k'; break;
+		case 'B': ch = 'j'; break;
+		case 'C': ch = 'l'; break;
+		case 'D': ch = 'h'; break;
+		default: ch = 0xf1 + (ch & 0xf); break;
+		}
 		break;
 	case '[': // function keys (2)
 		ch = rz_cons_readchar();
@@ -684,19 +690,19 @@ RZ_API bool rz_cons_yesno(int def, const char *fmt, ...) {
 }
 
 RZ_API char *rz_cons_input(const char *msg) {
-	char *oprompt = rz_line_get_prompt();
+	char *oprompt = rz_line_get_prompt(I->line);
 	if (!oprompt) {
 		return NULL;
 	}
 	char buf[1024];
 	if (msg) {
-		rz_line_set_prompt(msg);
+		rz_line_set_prompt(I->line, msg);
 	} else {
-		rz_line_set_prompt("");
+		rz_line_set_prompt(I->line, "");
 	}
 	buf[0] = 0;
 	rz_cons_fgets(buf, sizeof(buf), 0, NULL);
-	rz_line_set_prompt(oprompt);
+	rz_line_set_prompt(I->line, oprompt);
 	free(oprompt);
 	return strdup(buf);
 }
