@@ -1,3 +1,9 @@
+rizin-cutter (2.3.4-1parrot1) stable; urgency=medium
+
+  * New upstream version 2.3.4
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Thu, 21 Mar 2024 11:48:09 +0700
+
 rizin-cutter (2.3.3-1parrot1) stable; urgency=medium
 
   * New upstream version 2.3.3
