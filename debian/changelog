@@ -1,3 +1,9 @@
+rizin-cutter (2.4.1-0parrot3) echo; urgency=medium
+
+  * Update qt dependencies to qt6
+
+ -- Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>  Tue, 03 Feb 2026 20:19:12 +0100
+
 rizin-cutter (2.4.1-0parrot2) echo; urgency=medium
 
   * Use libstdc++-14-dev
