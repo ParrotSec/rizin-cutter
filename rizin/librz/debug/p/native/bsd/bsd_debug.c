@@ -64,9 +64,10 @@ static void addr_to_string(struct sockaddr_storage *ss, char *buffer, int buflen
 
 int bsd_handle_signals(RzDebug *dbg) {
 #if __KFBSD__ || __NetBSD__
+	siginfo_t siginfo;
+#if __KFBSD__
 	// Trying to figure out a bit by the signal
 	struct ptrace_lwpinfo linfo = { 0 };
-	siginfo_t siginfo;
 	int ret = ptrace(PT_LWPINFO, dbg->pid, (char *)&linfo, sizeof(linfo));
 	if (ret == -1) {
 		if (errno == ESRCH) {
@@ -83,7 +84,6 @@ int bsd_handle_signals(RzDebug *dbg) {
 		return 0;
 	}
 
-#if __KFBSD__
 	siginfo = linfo.pl_siginfo;
 #else
 	struct ptrace_siginfo sinfo = { 0 };
@@ -108,6 +108,13 @@ int bsd_handle_signals(RzDebug *dbg) {
 	case SIGSEGV:
 		dbg->reason.type = RZ_DEBUG_REASON_SEGFAULT;
 		break;
+#if __NetBSD__
+	case SIGTRAP:
+		if (siginfo.si_code == TRAP_BRKPT) {
+			dbg->reason.type = RZ_DEBUG_REASON_BREAKPOINT;
+		}
+		break;
+#endif
 	}
 
 	return 0;
@@ -163,7 +170,7 @@ RzDebugInfo *bsd_info(RzDebug *dbg, const char *arg) {
 	rdi->tid = dbg->tid;
 	rdi->uid = kp->ki_uid;
 	rdi->gid = kp->ki_pgid;
-	rdi->exe = strdup(kp->ki_comm);
+	rdi->exe = rz_str_dup(kp->ki_comm);
 
 	switch (kp->ki_stat) {
 	case SSLEEP:
@@ -209,18 +216,21 @@ RzDebugInfo *bsd_info(RzDebug *dbg, const char *arg) {
 		rdi->tid = dbg->tid;
 		rdi->uid = kp->p_uid;
 		rdi->gid = kp->p__pgid;
-		rdi->exe = strdup(kp->p_comm);
+		rdi->exe = rz_str_dup(kp->p_comm);
 
-		rdi->status = RZ_DBG_PROC_STOP;
-
-		if (kp->p_psflags & PS_ZOMBIE) {
-			rdi->status = RZ_DBG_PROC_ZOMBIE;
-		} else if (kp->p_psflags & PS_STOPPED) {
+		switch (kp->p_stat) {
+		case SDEAD:
+			rdi->status = RZ_DBG_PROC_DEAD;
+			break;
+		case SSTOP:
 			rdi->status = RZ_DBG_PROC_STOP;
-		} else if (kp->p_psflags & PS_PPWAIT) {
+			break;
+		case SSLEEP:
 			rdi->status = RZ_DBG_PROC_SLEEP;
-		} else if ((kp->p_psflags & PS_EXEC) || (kp->p_psflags & PS_INEXEC)) {
+			break;
+		default:
 			rdi->status = RZ_DBG_PROC_RUN;
+			break;
 		}
 	}
 
@@ -248,7 +258,7 @@ RzDebugInfo *bsd_info(RzDebug *dbg, const char *arg) {
 		rdi->tid = dbg->tid;
 		rdi->uid = kp->p_uid;
 		rdi->gid = kp->p__pgid;
-		rdi->exe = strdup(kp->p_comm);
+		rdi->exe = rz_str_dup(kp->p_comm);
 
 		rdi->status = RZ_DBG_PROC_STOP;
 
@@ -503,7 +513,6 @@ RzList *bsd_desc_list(int pid) {
 			if (kve->kf_sock_domain == AF_LOCAL) {
 				struct sockaddr_un *sun =
 					(struct sockaddr_un *)&kve->kf_un.kf_sock.kf_sa_local;
-				;
 				if (sun->sun_path[0] != 0)
 					addr_to_string(&kve->kf_un.kf_sock.kf_sa_local, path, sizeof(path));
 				else

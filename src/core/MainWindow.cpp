@@ -119,8 +119,6 @@
 // Tools
 #include "tools/basefind/BaseFindDialog.h"
 
-#define PROJECT_FILE_FILTER tr("Rizin Project (*.rzdb)")
-
 template<class T>
 T *getNewInstance(MainWindow *m)
 {
@@ -129,7 +127,8 @@ T *getNewInstance(MainWindow *m)
 
 using namespace Cutter;
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), core(Core()), ui(new Ui::MainWindow)
+MainWindow::MainWindow(QWidget *parent)
+    : QMainWindow(parent), core(Core()), ui(new Ui::MainWindow), ioModesController(this)
 {
     tabsOnTop = false;
     configuration = Config();
@@ -191,8 +190,7 @@ void MainWindow::initUI()
     connect(seek_to_func_start_shortcut, &QShortcut::activated, this,
             &MainWindow::seekToFunctionStart);
 
-    QShortcut *refresh_shortcut = new QShortcut(QKeySequence(QKeySequence::Refresh), this);
-    connect(refresh_shortcut, &QShortcut::activated, this, &MainWindow::refreshAll);
+    ui->actionRefresh_contents->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
 
     connect(ui->actionZoomIn, &QAction::triggered, this, &MainWindow::onZoomIn);
     connect(ui->actionZoomOut, &QAction::triggered, this, &MainWindow::onZoomOut);
@@ -297,6 +295,7 @@ void MainWindow::initToolBar()
     ui->menuDebug->addAction(debugActions->actionStartEmul);
     ui->menuDebug->addAction(debugActions->actionAttach);
     ui->menuDebug->addAction(debugActions->actionStartRemote);
+    ui->menuDebug->addAction(debugActions->actionStop);
     ui->menuDebug->addSeparator();
     ui->menuDebug->addAction(debugActions->actionStep);
     ui->menuDebug->addAction(debugActions->actionStepOver);
@@ -538,7 +537,7 @@ void MainWindow::openNewFile(InitialOptions &options, bool skipOptionsDialog)
     if (options.script.isEmpty()) {
         QString script = QString("%1.rz").arg(this->filename);
         if (rz_file_exists(script.toStdString().data())) {
-            QMessageBox mb;
+            QMessageBox mb(this);
             mb.setWindowTitle(tr("Script loading"));
             mb.setText(tr("Do you want to load the '%1' script?").arg(script));
             mb.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
@@ -724,8 +723,8 @@ RzProjectErr MainWindow::saveProjectAs(bool *canceled)
     QFileDialog fileDialog(this);
     // Append 'rzdb' suffix if it does not exist
     fileDialog.setDefaultSuffix("rzdb");
-    QString file =
-            fileDialog.getSaveFileName(this, tr("Save Project"), projectFile, PROJECT_FILE_FILTER);
+    QString file = fileDialog.getSaveFileName(this, tr("Save Project"), projectFile,
+                                              tr("Rizin Project (*.rzdb)"));
     if (file.isEmpty()) {
         if (canceled) {
             *canceled = true;
@@ -1710,8 +1709,6 @@ void MainWindow::on_actionImportPDB_triggered()
     }
 }
 
-#define TYPE_BIG_ENDIAN(type, big_endian) big_endian ? type##_BE : type##_LE
-
 void MainWindow::on_actionExport_as_code_triggered()
 {
     QStringList filters;
@@ -1720,12 +1717,17 @@ void MainWindow::on_actionExport_as_code_triggered()
 
     filters << tr("C uin8_t array (*.c)");
     typMap[filters.last()] = RZ_LANG_BYTE_ARRAY_C_CPP_BYTES;
+
+#define TYPE_BIG_ENDIAN(type, big_endian) big_endian ? type##_BE : type##_LE
+
     filters << tr("C uin16_t array (*.c)");
     typMap[filters.last()] = TYPE_BIG_ENDIAN(RZ_LANG_BYTE_ARRAY_C_CPP_HALFWORDS, big_endian);
     filters << tr("C uin32_t array (*.c)");
     typMap[filters.last()] = TYPE_BIG_ENDIAN(RZ_LANG_BYTE_ARRAY_C_CPP_WORDS, big_endian);
     filters << tr("C uin64_t array (*.c)");
     typMap[filters.last()] = TYPE_BIG_ENDIAN(RZ_LANG_BYTE_ARRAY_C_CPP_DOUBLEWORDS, big_endian);
+
+#undef TYPE_BIG_ENDIAN
 
     filters << tr("Go array (*.go)");
     typMap[filters.last()] = RZ_LANG_BYTE_ARRAY_GOLANG;

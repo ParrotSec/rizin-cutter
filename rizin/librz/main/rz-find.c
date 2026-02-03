@@ -38,6 +38,7 @@ typedef struct {
 	const char *mask;
 	const char *curfile;
 	const char *comma;
+	const char *exec_command;
 } RzfindOptions;
 
 static void rzfind_options_fini(RzfindOptions *ro) {
@@ -51,12 +52,19 @@ static void rzfind_options_init(RzfindOptions *ro) {
 	ro->bsize = 4096;
 	ro->to = UT64_MAX;
 	ro->keywords = rz_list_newf(NULL);
+	ro->exec_command = NULL;
 }
 
 static int rzfind_open(RzfindOptions *ro, const char *file);
 
+typedef struct {
+	RzfindOptions *opt;
+	const char *filename;
+} RzfindContext;
+
 static int hit(RzSearchKeyword *kw, void *user, ut64 addr) {
-	RzfindOptions *ro = (RzfindOptions *)user;
+	RzfindContext *ctx = (RzfindContext *)user;
+	RzfindOptions *ro = ctx->opt;
 	int delta = addr - ro->cur;
 	if (ro->cur > addr && (ro->cur - addr == kw->keyword_length - 1)) {
 		// This case occurs when there is hit in search left over
@@ -65,6 +73,9 @@ static int hit(RzSearchKeyword *kw, void *user, ut64 addr) {
 	if (delta < 0 || delta >= ro->bsize) {
 		eprintf("Invalid delta\n");
 		return 0;
+	}
+	if (!ro->quiet) {
+		printf("File: %s\n", ctx->filename);
 	}
 	char _str[128];
 	char *str = _str;
@@ -140,6 +151,15 @@ static int hit(RzSearchKeyword *kw, void *user, ut64 addr) {
 			}
 		}
 	}
+	if (ro->exec_command) {
+		char *command = rz_str_newf("%s %s", ro->exec_command, ro->curfile);
+		int status = rz_sys_system(command);
+		if (status == -1) {
+			RZ_LOG_ERROR("Failed to execute command: %s\n", command);
+		}
+		free(command);
+		return 1;
+	}
 	return 1;
 }
 
@@ -181,6 +201,7 @@ static int show_help(const char *argv0, int line) {
 		"-a",    "[align]", "Only accept aligned hits",
 		"-b",    "[size]",  "Set block size",
 		"-e",    "[regex]", "Search for regex matches (can be used multiple times)",
+		"-E",    "[cmd]",   "Execute command for each file found",
 		"-f",    "[from]",  "Start searching from address 'from'",
 		"-F",    "[file]",  "Read the contents of the file and use it as keyword",
 		"-h",    "",        "Show this help",
@@ -228,10 +249,6 @@ static int rzfind_open_file(RzfindOptions *ro, const char *file, const ut8 *data
 	int ret, result = 0;
 
 	ro->buf = NULL;
-	if (!ro->quiet) {
-		printf("File: %s\n", file);
-	}
-
 	char *efile = rz_str_escape_sh(file);
 
 	if (ro->identify) {
@@ -341,7 +358,8 @@ static int rzfind_open_file(RzfindOptions *ro, const char *file, const ut8 *data
 		goto err;
 	}
 	rs->align = ro->align;
-	rz_search_set_callback(rs, &hit, ro);
+	RzfindContext ctx = { .opt = ro, .filename = file };
+	rz_search_set_callback(rs, &hit, &ctx);
 	ut64 to = ro->to;
 	if (to == -1) {
 		to = rz_io_size(io);
@@ -393,13 +411,13 @@ static int rzfind_open_file(RzfindOptions *ro, const char *file, const ut8 *data
 
 	if (ro->mode == RZ_SEARCH_MAGIC) {
 		/* TODO: implement using api */
-		char *tostr = (to && to != UT64_MAX) ? rz_str_newf("-e search.to=%" PFMT64d, to) : strdup("");
+		char *tostr = (to && to != UT64_MAX) ? rz_str_newf("-e search.to=%" PFMT64d, to) : rz_str_dup("");
 		rz_sys_cmdf("rizin"
 			    " -e search.in=range"
 			    " -e search.align=%d"
 			    " -e search.from=%" PFMT64d
 			    " %s -qnc/m%s \"%s\"",
-			ro->align, ro->from, tostr, ro->json ? "j" : "", efile);
+			ro->align < 1 ? 1 : ro->align, ro->from, tostr, ro->json ? "j" : "", efile);
 		free(tostr);
 		goto done;
 	}
@@ -452,7 +470,6 @@ static int rzfind_open_file(RzfindOptions *ro, const char *file, const ut8 *data
 
 		if (rz_search_update(rs, ro->cur, ro->buf, ret) == -1) {
 			eprintf("search: update read error at 0x%08" PFMT64x "\n", ro->cur);
-			break;
 		}
 	}
 done:
@@ -519,6 +536,10 @@ RZ_API int rz_main_rz_find(int argc, const char **argv) {
 		switch (c) {
 		case 'a':
 			ro.align = rz_num_math(NULL, opt.arg);
+			if (rz_bits_count_ones_ut64(ro.align) != 1) {
+				RZ_LOG_ERROR("Alignment must only have one bit set.\n");
+				return 1;
+			}
 			break;
 		case 'r':
 			ro.rad = true;
@@ -541,8 +562,8 @@ RZ_API int rz_main_rz_find(int argc, const char **argv) {
 			rz_list_append(ro.keywords, (void *)opt.arg);
 			break;
 		case 'E':
-			ro.mode = RZ_SEARCH_ESIL;
-			rz_list_append(ro.keywords, (void *)opt.arg);
+			ro.quiet = true;
+			ro.exec_command = opt.arg;
 			break;
 		case 's':
 			ro.mode = RZ_SEARCH_KEYWORD;

@@ -1,6 +1,10 @@
-project('pcre2', 'c', version: '10.43')
+project('pcre2', 'c', version: '10.45')
 
 cc = meson.get_compiler('c')
+
+if cc.has_argument('--std=c99')
+  add_project_arguments('--std=c99', language: ['c'])
+endif
 
 conf_data = configuration_data()
 
@@ -30,6 +34,7 @@ pcre2_files = [
   pcre2_chartables,
   'src/pcre2_chkdint.c',
   'src/pcre2_compile.c',
+  'src/pcre2_compile_class.c',
   'src/pcre2_config.c',
   'src/pcre2_context.c',
   'src/pcre2_convert.c',
@@ -58,13 +63,14 @@ pcre2_files = [
 cpu_jit_supported = [ 'aarch64', 'arm', 'mips', 'mips64', 'ppc', 'ppc64', 'riscv32', 'riscv64', 's390x', 'x86', 'x86_64' ]
 
 # tcc doesn't support the MSVC asm syntax PCRE2 uses (`__asm { ... }`).
+# Darwin kernel not as well, because of forbidden wx memory.
 # It is used in the JIT compiler code.
-if cc.get_id() != 'tcc' and target_machine.cpu_family() in cpu_jit_supported
+if cc.get_id() != 'tcc' and target_machine.cpu_family() in cpu_jit_supported and target_machine.system() != 'darwin'
   libpcre2_c_args += ['-DSUPPORT_JIT']
   pcre2_files += ['src/pcre2_jit_compile.c']
 endif
 
-if target_machine.system() == 'openbsd' or target_machine.system() == 'darwin'
+if target_machine.system() == 'openbsd'
   # jit compilation fails with "no more memory" if wx allocations are allowed.
   libpcre2_c_args += ['-DSLJIT_WX_EXECUTABLE_ALLOCATOR']
 elif target_machine.system() == 'netbsd'
