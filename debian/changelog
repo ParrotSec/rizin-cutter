@@ -1,3 +1,9 @@
+rizin-cutter (2.4.1-0parrot1) echo; urgency=medium
+
+  * New upstream version 2.4.1
+
+ -- Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>  Tue, 03 Feb 2026 18:18:27 +0100
+
 rizin-cutter (2.3.4-1parrot1) stable; urgency=medium
 
   * New upstream version 2.3.4
